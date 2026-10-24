@@ -879,13 +879,14 @@ dialog.sheet.wide .sheet-body {
   background: var(--code-bg);
 }
 
+/* Commands wrap so they can be read in full on a phone while typing them on the computer. */
 .cmd code {
   flex: 1;
   min-width: 0;
-  padding: 0;
+  padding: 2px 0;
   background: none;
-  overflow-x: auto;
-  white-space: nowrap;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 /* Workspace layout */
@@ -1901,4 +1902,37 @@ dialog.sheet.wide .sheet-body {
 
 .icon-btn.stop svg {
   fill: currentColor;
+}
+
+/* OS-specific setup help */
+.os-picker {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--panel-3) 70%, transparent);
+  width: fit-content;
+  max-width: 100%;
+}
+
+.os-picker button {
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.os-picker button.active {
+  background: var(--panel);
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
+}
+
+.host-setup p {
+  margin: 0;
+}
+
+.stack.tight {
+  gap: 2px;
 }

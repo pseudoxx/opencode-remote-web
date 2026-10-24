@@ -1,4 +1,5 @@
 import type { ServerKind } from "./types"
+import type { HostOS } from "./hostos"
 
 // Saved servers live only in this browser. "Remember" puts a server in localStorage; otherwise it goes to
 // sessionStorage and disappears when the tab closes. Nothing is ever sent anywhere except the server itself.
@@ -18,6 +19,8 @@ export type ServerRecord = {
   lastUsed?: number
   lastDirectory?: string
   lastSession?: string
+  // OS of the computer running this server, learned from its paths after connecting.
+  os?: HostOS
 }
 
 const KEY = "ocr:servers"
@@ -55,6 +58,7 @@ export function saveServers(list: ServerRecord[]) {
 export type Prefs = {
   lastServer?: string
   theme?: "system" | "light" | "dark"
+  hostOS?: HostOS
   enterToSend?: boolean
   notify?: boolean
   showReasoning?: boolean

@@ -318,6 +318,11 @@ export function createV1(baseUrl: string, fetcher: typeof fetch, version: string
       return list.map((e): DirEntry => ({ name: e.name, path: e.absolute, type: e.type })).sort((a, b) => a.name.localeCompare(b.name))
     },
 
+    async hostPaths() {
+      const p = await call<{ home: string; directory: string; state?: string }>("GET", "/path").catch(() => undefined)
+      return [p?.home, p?.directory, p?.state].filter((x): x is string => !!x)
+    },
+
     async home() {
       const p = await call<{ home: string; directory: string }>("GET", "/path").catch(() => undefined)
       return p?.directory ?? p?.home

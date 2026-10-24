@@ -10,6 +10,7 @@ import {
   tokenExpiry,
 } from "../src/lib/pairing"
 import { sessionToMarkdown, toolSummary } from "../src/lib/export"
+import { guessHostOS, osFromPaths } from "../src/lib/hostos"
 import type { Message, Session } from "../src/lib/types"
 
 test("parses the QR payload printed by opencode pair", () => {
@@ -105,4 +106,33 @@ test("summarizes tool calls by their most telling argument", () => {
   expect(toolSummary({ name: "edit", input: { path: "src/a.ts", oldString: "x" } })).toBe("src/a.ts")
   expect(toolSummary({ name: "question", input: { questions: [{ question: "Which one?" }] } })).toBe("Which one?")
   expect(toolSummary({ name: "x", input: { command: "a".repeat(300) } })).toHaveLength(158)
+})
+
+test("reads the server's OS from its paths", () => {
+  expect(osFromPaths(["C:\\Users\\me\\AppData\\Local\\Temp\\opencode"])).toBe("windows")
+  expect(osFromPaths(["/tmp/opencode", "/Users/me/code/app"])).toBe("macos")
+  expect(osFromPaths(["/var/folders/xy/abc/T/opencode"])).toBe("macos")
+  expect(osFromPaths(["/home/me/src"])).toBe("linux")
+  expect(osFromPaths(["/srv/work", "/tmp/opencode"])).toBe("linux")
+  expect(osFromPaths(["/srv/work", undefined])).toBeUndefined()
+})
+
+test("guesses the OpenCode computer's OS before it can be asked", () => {
+  const original = Object.getOwnPropertyDescriptor(globalThis, "navigator")
+  const device = (platform: string, userAgent: string, maxTouchPoints = 0) =>
+    Object.defineProperty(globalThis, "navigator", { configurable: true, value: { platform, userAgent, maxTouchPoints } })
+  try {
+    device("iPhone", "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)")
+    expect(guessHostOS({ known: "linux", serverUrl: "http://10.0.0.2:28894" })).toMatchObject({ os: "linux", certain: true })
+    expect(guessHostOS({ serverUrl: "http://10.0.0.2:28894" }).os).toBe("windows")
+    expect(guessHostOS({ serverUrl: "https://abc.tunnel.example", lastPick: "windows" }).os).toBe("windows")
+    expect(guessHostOS({ serverUrl: "http://10.0.0.2:49374", lastPick: "windows" }).os).toBe("macos")
+    expect(guessHostOS({ serverUrl: "https://abc.tunnel.example" }).os).toBe("macos")
+    device("Win32", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+    expect(guessHostOS({ serverUrl: "https://abc.tunnel.example" })).toMatchObject({ os: "windows", reason: "Guessed from this device." })
+    device("MacIntel", "Mozilla/5.0 (Macintosh)", 5)
+    expect(guessHostOS({}).reason).toBe("Pick the computer that runs OpenCode.")
+  } finally {
+    if (original) Object.defineProperty(globalThis, "navigator", original)
+  }
 })

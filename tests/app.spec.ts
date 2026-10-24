@@ -82,8 +82,27 @@ test.describe("connecting", () => {
     // Chromium hides whether a local server answered (Local Network Access blocks the no-cors probe), so there the
     // app can only say "unreachable or blocked" and still offers the CORS fix.
     const message = browserName === "chromium" ? /does not allow this app's origin|Could not reach/ : /does not allow this app's origin/
-    await expect(page.locator(".note.error").first()).toContainText(message)
-    await expect(page.locator(".note.error .cmd code").first()).toHaveText(`opencode service set cors ${foreign}`)
+    const help = page.locator(".note.error").first()
+    await expect(help).toContainText(message)
+    const commands = () => help.locator(".cmd code").allTextContents()
+
+    await help.getByRole("radio", { name: "Windows" }).click()
+    expect(await commands()).toEqual([
+      `& "$env:LOCALAPPDATA\\Programs\\@opencodedesktop\\resources\\opencode-cli.exe" service set cors "${foreign}"`,
+      `& "$env:LOCALAPPDATA\\Programs\\@opencodedesktop\\resources\\opencode-cli.exe" service restart`,
+      `opencode service set cors "${foreign}"`,
+      "opencode service restart",
+    ])
+    await help.getByRole("radio", { name: "macOS" }).click()
+    expect((await commands())[0]).toBe(`"/Applications/OpenCode.app/Contents/Resources/opencode-cli" service set cors ${foreign}`)
+    await help.getByRole("radio", { name: "Linux" }).click()
+    expect((await commands()).slice(0, 2)).toEqual([`opencode service set cors ${foreign}`, "opencode service restart"])
+    if (process.env.E2E_SCREENSHOT) await page.screenshot({ path: process.env.E2E_SCREENSHOT, fullPage: true })
+
+    // The pick is remembered for the next time help is shown.
+    await help.getByRole("radio", { name: "Windows" }).click()
+    await page.getByRole("button", { name: "Connect", exact: true }).click()
+    await expect(page.locator(".note.error").first().getByRole("radio", { name: "Windows" })).toHaveAttribute("aria-checked", "true")
   })
 
   test("a saved server that is down shows the problem on the server list", async ({ page }) => {
@@ -412,6 +431,8 @@ test.describe("connection health", () => {
     await page.getByRole("button", { name: /Connection: Live/ }).first().click()
     const dialog = page.locator("dialog[open]")
     await expect(dialog).toContainText(`v${process.env.E2E_OPENCODE_VERSION?.match(/\d+\.\d+\.\d+/)?.[0]}`)
+    // The lab server runs on Linux; the app learns that from its paths after connecting.
+    await expect(dialog).toContainText(/Computer\s*Linux/)
     await dialog.getByRole("button", { name: "Test connection" }).click()
     await expect(dialog).toContainText("5/5 requests OK")
     await expect(dialog).toContainText(/Last heartbeat/)

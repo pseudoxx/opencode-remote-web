@@ -202,5 +202,7 @@ export interface Backend {
   diff(sessionID: string, range?: { from?: string; to?: string }): Promise<FileDiff[]>
   listDirectory(directory: string): Promise<DirEntry[]>
   home(): Promise<string | undefined>
+  // Paths that reveal the server's OS (home or working folder, temp folder).
+  hostPaths(): Promise<string[]>
   subscribe(handler: (event: BackendEvent) => void, opts: { signal: AbortSignal; onActivity: () => void }): Promise<void>
 }

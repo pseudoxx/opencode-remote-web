@@ -2,6 +2,7 @@ import type { ComponentChildren } from "preact"
 import { useEffect, useRef, useState } from "preact/hooks"
 import { Icon } from "./Icon"
 import { toasts } from "../state/store"
+import { copyText } from "../lib/export"
 
 // A native <dialog>: focus trapping, Escape and the backdrop come for free in every current browser. Styled as a
 // bottom sheet on phones and a centered panel on larger screens.
@@ -154,5 +155,14 @@ export function CopyButton({ text, label = "Copy", onCopy }: { text: () => strin
     >
       <Icon name={done ? "check" : "copy"} size={15} />
     </button>
+  )
+}
+
+export function Cmd({ text }: { text: string }) {
+  return (
+    <div class="cmd">
+      <code>{text}</code>
+      <CopyButton text={() => text} onCopy={copyText} label="Copy command" />
+    </div>
   )
 }

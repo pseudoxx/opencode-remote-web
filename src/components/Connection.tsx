@@ -3,6 +3,7 @@ import { Icon } from "./Icon"
 import { Sheet, Spinner } from "./ui"
 import { activeServer, backend, conn, disconnect, lastActivity, measureLatency, retryConnection } from "../state/store"
 import { describeError } from "../lib/connect"
+import { HOST_OS_LABEL } from "../lib/hostos"
 
 const labels: Record<string, string> = {
   idle: "Disconnected",
@@ -92,6 +93,12 @@ export function ConnectionDialog({ open, onClose, onRepair }: { open: boolean; o
           <dd class="mono break">{server?.url}</dd>
           <dt>OpenCode</dt>
           <dd>{b ? `v${b.version} (${b.kind === "v2" ? "v2 API" : "1.x API"})` : (server?.version ?? "—")}</dd>
+          {server?.os && (
+            <>
+              <dt>Computer</dt>
+              <dd>{HOST_OS_LABEL[server.os]}</dd>
+            </>
+          )}
           <dt>Signed in as</dt>
           <dd>
             {server?.username} · {server?.auth === "token" ? "paired device" : "password"}

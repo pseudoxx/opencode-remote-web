@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "preact/hooks"
 import { Icon } from "./Icon"
-import { CopyButton, Spinner } from "./ui"
+import { Cmd, Spinner } from "./ui"
+import { CorsFix } from "./HostSetup"
 import { QrScanner, decodeImageFile } from "./QrScanner"
 import { ConnectError, authHeader, describeError, detect, exchangePairingCode } from "../lib/connect"
 import { blockedAsMixedContent, normalizeServerUrl, parseConnectInput, type ConnectRequest } from "../lib/pairing"
 import { newId, type ServerRecord } from "../lib/storage"
-import { copyText } from "../lib/export"
+import type { HostOS } from "../lib/hostos"
 import { relativeTime } from "../lib/format"
 import { conn, connectServer, failedServer, removeServer, servers, upsertServer } from "../state/store"
 
@@ -179,6 +180,7 @@ export function ConnectScreen({ initial, onInitialUsed }: { initial?: string; on
               <ErrorHelp
                 error={{ reason: conn.value.status === "unauthorized" ? "unauthorized" : (conn.value.reason ?? "other"), message: conn.value.error, url: saved.find((s) => s.id === failedServer.value)?.url }}
                 origin={origin}
+                known={saved.find((s) => s.id === failedServer.value)?.os}
               />
             )}
           </section>
@@ -332,21 +334,21 @@ export function ConnectScreen({ initial, onInitialUsed }: { initial?: string; on
           <ol>
             <li>
               <p>
-                Allow this app to talk to your OpenCode (once). With the OpenCode desktop app or <code>@opencode/cli</code> 2.x:
+                Allow this app's origin (<code>{origin}</code>) on the computer that runs OpenCode. Once is enough.
               </p>
-              <Cmd text={`opencode service set cors ${origin}`} />
-              <Cmd text="opencode service restart" />
-              <p class="muted small">
-                Running <code>opencode serve</code> yourself instead? Add <code>--cors {origin}</code>. Already allowing other
-                origins? Separate them with commas.
-              </p>
+              <CorsFix origin={origin} />
             </li>
             <li>
-              <p>Create a pairing link and scan it here:</p>
+              <p>Pair this device:</p>
+              <p class="small">
+                In the OpenCode desktop app, open <strong>Pairing</strong> → <strong>Pair device</strong> and turn on{" "}
+                <strong>Remote access</strong>, then scan the QR code here or use <strong>Copy link</strong> and paste it. With
+                the CLI:
+              </p>
               <Cmd text="opencode pair --remote" />
               <p class="muted small">
-                <code>--remote</code> gives an HTTPS address that works from anywhere. On the same Wi-Fi with an HTTP page,
-                plain <code>opencode pair</code> works too. Using Tailscale or a tunnel? <code>opencode pair --url https://your-address</code>.
+                Remote access gives an HTTPS address that works from anywhere. On the same Wi-Fi with an HTTP page, plain{" "}
+                <code>opencode pair</code> works too. Using Tailscale or a tunnel? <code>opencode pair --url https://your-address</code>.
               </p>
             </li>
           </ol>
@@ -360,16 +362,7 @@ export function ConnectScreen({ initial, onInitialUsed }: { initial?: string; on
   )
 }
 
-function Cmd({ text }: { text: string }) {
-  return (
-    <div class="cmd">
-      <code>{text}</code>
-      <CopyButton text={() => text} onCopy={copyText} label="Copy command" />
-    </div>
-  )
-}
-
-function ErrorHelp({ error, origin }: { error: { reason: string; message: string; url?: string }; origin: string }) {
+function ErrorHelp({ error, origin, known }: { error: { reason: string; message: string; url?: string }; origin: string; known?: HostOS }) {
   return (
     <div class="note error stack">
       <p>
@@ -378,42 +371,39 @@ function ErrorHelp({ error, origin }: { error: { reason: string; message: string
       {error.reason === "cors" && (
         <div class="stack">
           <p>Allow this app's origin on the computer running OpenCode, then try again:</p>
-          <Cmd text={`opencode service set cors ${origin}`} />
-          <Cmd text="opencode service restart" />
-          <p class="small">
-            Standalone server: restart it with <code>opencode serve --cors {origin}</code>.
-          </p>
+          <CorsFix origin={origin} serverUrl={error.url} known={known} />
         </div>
       )}
       {error.reason === "mixed-content" && (
         <p class="small">
-          Run <code>opencode pair --remote</code> for an HTTPS link, or put the server behind Tailscale Serve / a Cloudflare
-          Tunnel and use <code>opencode pair --url https://…</code>.
+          Turn on remote access when pairing (<code>opencode pair --remote</code>) for an HTTPS link, or put the server
+          behind Tailscale Serve / a Cloudflare Tunnel and use <code>opencode pair --url https://…</code>.
           {error.url && blockedAsMixedContent(error.url) ? " In Chrome you can also allow local network access when prompted." : ""}
         </p>
       )}
       {error.reason === "unreachable" && (
         <div class="stack">
           <p class="small">
-            Is OpenCode running (<code>opencode service status</code>)? For LAN addresses the server must listen on all
-            interfaces (<code>opencode service set hostname 0.0.0.0</code>) and both devices must be on the same network.
+            Is OpenCode running? For LAN addresses the server must listen on all interfaces (
+            <code>opencode service set hostname 0.0.0.0</code>) and both devices must be on the same network.
           </p>
           <p class="small">
             If it is running, the browser may be blocking this app's origin. Browsers report that the same way as an
             unreachable server, so allow the origin to rule it out:
           </p>
-          <Cmd text={`opencode service set cors ${origin}`} />
-          <Cmd text="opencode service restart" />
+          <CorsFix origin={origin} serverUrl={error.url} known={known} />
         </div>
       )}
       {error.reason === "unauthorized" && (
         <p class="small">
-          The saved pairing expired or the server password changed. Run <code>opencode pair</code> and pair this device again.
+          The saved pairing expired or the server password changed. Pair this device again (Pair device in the OpenCode
+          app, or <code>opencode pair</code>).
         </p>
       )}
       {error.reason === "expired-code" && (
         <p class="small">
-          Pairing links work once and expire after 5 minutes. Run <code>opencode pair</code> again for a fresh one.
+          Pairing links work once and expire after 5 minutes. Create a fresh one (Pair device → New code, or{" "}
+          <code>opencode pair</code>).
         </p>
       )}
     </div>

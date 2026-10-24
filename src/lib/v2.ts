@@ -232,6 +232,11 @@ export function createV2(client: Client, version: string): Backend {
         .sort((a, b) => a.name.localeCompare(b.name))
     },
 
+    async hostPaths() {
+      const [info, loc] = await Promise.all([client.server.info().catch(() => undefined), client.location.get().catch(() => undefined)])
+      return [loc?.directory, info?.paths?.tmp].filter((p): p is string => !!p)
+    },
+
     async home() {
       const loc = await client.location.get().catch(() => undefined)
       return loc?.directory

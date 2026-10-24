@@ -22,6 +22,7 @@ import type {
 import { authHeader, createBackend, describeError, detect, isUnauthorized, type ConnectError } from "../lib/connect"
 import { loadPrefs, loadServers, savePrefs, saveServers, type Prefs, type ServerRecord } from "../lib/storage"
 import { basename } from "../lib/format"
+import { osFromPaths } from "../lib/hostos"
 
 // ---------------------------------------------------------------------------------------------------------------
 // Saved servers and preferences (this device only)
@@ -368,12 +369,21 @@ async function resync(b: Backend) {
     loadBusy(b),
     b.home().then((h) => (home.value = h)),
   ])
+  rememberHostOS(b)
   // Sessions load before the open one is re-fetched: 1.x needs to know which project folder a session lives in.
   await Promise.allSettled([
     loadSessions(b).then(() => (sid ? openSession(sid, { quiet: true }) : undefined)),
     loadCatalog(b),
     loadPending(b),
   ])
+}
+
+// The server's paths reveal its OS; setup help uses it the next time this server needs attention.
+async function rememberHostOS(b: Backend) {
+  const paths = await b.hostPaths().catch(() => [] as string[])
+  const record = activeServer.value
+  const os = osFromPaths([...paths, home.value, ...projects.value.map((p) => p.directory)])
+  if (record && os && record.os !== os) updateServer(record.id, { os })
 }
 
 async function ensureDirectory(b: Backend) {
