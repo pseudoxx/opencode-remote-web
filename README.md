@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <b>Unofficial, responsive browser and mobile remote control for your OpenCode assistant server.</b>
+  <b>Responsive browser and mobile remote control for your OpenCode assistant server.</b>
 </p>
 
 <p align="center">
@@ -14,11 +14,9 @@
 
 ---
 
-An unofficial remote control for [OpenCode](https://opencode.ai) that runs entirely in the browser. Open the page on your phone, tablet or another computer, scan the QR code from `opencode pair`, and drive your OpenCode sessions: chat, approve commands, answer the agent's questions, switch models, revert turns, review changes and export conversations.
+A remote control for [OpenCode](https://opencode.ai) that runs entirely in the browser. Open the page on your phone, tablet or another computer, scan the QR code from `opencode pair`, and drive your OpenCode sessions: chat, approve commands, answer the agent's questions, switch models, revert turns, review changes and export conversations.
 
 There is no backend. The page is static files; it talks straight to your own OpenCode server, and the pairing token stays in your browser's storage.
-
-> Not affiliated with or endorsed by the OpenCode project.
 
 ---
 

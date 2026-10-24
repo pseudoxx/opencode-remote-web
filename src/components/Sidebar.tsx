@@ -125,7 +125,7 @@ export function Sidebar(props: { onNavigate: () => void; onConnection: () => voi
         <button class="btn ghost small" onClick={props.onSettings}>
           <Icon name="settings" size={16} /> Settings
         </button>
-        <span class="muted tiny">v{__APP_VERSION__} · unofficial</span>
+        <span class="muted tiny">v{__APP_VERSION__}</span>
       </div>
 
       <ProjectPicker

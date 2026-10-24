@@ -7,7 +7,7 @@ import { prefs } from "./state/store"
 
 // Refuse to run inside a frame: a page that can approve shell commands must not be clickjackable.
 if (window.top !== window.self) {
-  document.body.textContent = "OC Remote cannot be embedded in another page."
+  document.body.textContent = "OpenCode Remote Web cannot be embedded in another page."
 } else {
   applyTheme(prefs.value.theme)
   render(<App />, document.getElementById("app")!)

@@ -1,7 +1,7 @@
 {
   "name": "OpenCode Remote Web",
-  "short_name": "OpenCode Remote",
-  "description": "Unofficial browser remote control for your own OpenCode server.",
+  "short_name": "OC Remote Web",
+  "description": "Browser remote control for your own OpenCode server.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

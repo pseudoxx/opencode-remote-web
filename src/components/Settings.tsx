@@ -86,7 +86,7 @@ export function Settings({ open, onClose }: { open: boolean; onClose: () => void
             <Icon name="shield" size={16} /> Privacy
           </h3>
           <p class="small muted">
-            OC Remote is a static page with no backend. Server addresses and pairing tokens are kept in this browser's
+            OpenCode Remote Web is a static page with no backend. Server addresses and pairing tokens are kept in this browser's
             storage ({servers.value.filter((s) => s.remember).length} remembered, {servers.value.filter((s) => !s.remember).length} for this tab only)
             and are sent only to your own OpenCode server.
           </p>
@@ -103,7 +103,7 @@ export function Settings({ open, onClose }: { open: boolean; onClose: () => void
           </button>
         </div>
         <p class="muted tiny">
-          OC Remote v{__APP_VERSION__}. Not affiliated with the OpenCode project.
+          OpenCode Remote Web v{__APP_VERSION__}
         </p>
       </div>
     </Sheet>

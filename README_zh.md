@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <b>非官方的 OpenCode 终端助手 Web / 移动端远程控制面板。</b>
+  <b>OpenCode 终端助手 Web / 移动端远程控制面板。</b>
 </p>
 
 <p align="center">
@@ -14,11 +14,9 @@
 
 ---
 
-[OpenCode](https://opencode.ai) 的非官方纯前端远程控制面板。您只需在手机、平板或另一台电脑的浏览器中打开该页面，扫描终端 `opencode pair` 生成的二维码，即可随时随地管理您的 OpenCode 会话：实时聊天、审批命令、回答 Agent 提问、切换模型、步骤回滚、审查代码修改以及导出对话记录。
+[OpenCode](https://opencode.ai) 的纯前端远程控制面板。您只需在手机、平板或另一台电脑的浏览器中打开该页面，扫描终端 `opencode pair` 生成的二维码，即可随时随地管理您的 OpenCode 会话：实时聊天、审批命令、回答 Agent 提问、切换模型、步骤回滚、审查代码修改以及导出对话记录。
 
 项目完全无后端服务，纯静态网页运行；直接与您自己的 OpenCode 服务器通信，配对 Token 仅保存在您本地浏览器的存储中。
-
-> 本项目非 OpenCode 官方团队开发或背书。
 
 ---
 

@@ -2,7 +2,7 @@
   "name": "opencode-remote-web",
   "version": "0.1.0",
   "private": true,
-  "description": "Unofficial browser-only remote control for OpenCode servers",
+  "description": "Browser-only remote control for OpenCode servers",
   "license": "MIT",
   "type": "module",
   "scripts": {

@@ -996,7 +996,7 @@ export function projectLabel(dir: string | null) {
 
 effect(() => {
   const n = attention.value
-  const base = "OC Remote"
+  const base = "OC Remote Web"
   document.title = n ? `(${n}) ${base}` : base
 })
 

@@ -135,8 +135,8 @@ export function ConnectScreen({ initial, onInitialUsed }: { initial?: string; on
         <header class="brand">
           <img src="./icon.svg" alt="" width={44} height={44} />
           <div>
-            <h1>OC Remote</h1>
-            <p class="muted">Control your OpenCode from any browser. Unofficial, open source, no backend.</p>
+            <h1>OC Remote Web</h1>
+            <p class="muted">Control your OpenCode from any browser. Open source, no backend.</p>
           </div>
         </header>
 
