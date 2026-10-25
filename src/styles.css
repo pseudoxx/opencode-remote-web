@@ -1936,3 +1936,51 @@ dialog.sheet.wide .sheet-body {
 .stack.tight {
   gap: 2px;
 }
+
+/* Language picker */
+.language-select {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.language-select select {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--text);
+}
+
+.language-select.compact {
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  padding: 0 4px 0 8px;
+  border-radius: 999px;
+  background: var(--panel-2);
+}
+
+.language-select.compact select {
+  border: 0;
+  background: transparent;
+  padding: 4px 6px;
+  font-size: 13px;
+}
+
+@media (pointer: coarse) {
+  .language-select.compact select {
+    font-size: 16px;
+  }
+}
+
+.brand {
+  position: relative;
+}
+
+.brand .language-select {
+  margin-left: auto;
+  align-self: flex-start;
+}

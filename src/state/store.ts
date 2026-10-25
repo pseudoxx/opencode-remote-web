@@ -19,7 +19,9 @@ import type {
   TextPart,
   ToolPart,
 } from "../lib/types"
-import { authHeader, createBackend, describeError, detect, isUnauthorized, type ConnectError } from "../lib/connect"
+import { AppError, authHeader, createBackend, describeError, detect, isUnauthorized, type ConnectError } from "../lib/connect"
+import { t, type MessageKey } from "../i18n"
+import { APP_NAME } from "../lib/brand"
 import { loadPrefs, loadServers, savePrefs, saveServers, type Prefs, type ServerRecord } from "../lib/storage"
 import { basename } from "../lib/format"
 import { osFromPaths } from "../lib/hostos"
@@ -192,7 +194,7 @@ async function runStream(b: Backend, ctrl: AbortController) {
     }
     if (ctrl.signal.aborted) return
     if (failure && isUnauthorized(failure)) {
-      setConn({ status: "unauthorized", error: "The server no longer accepts this device's credentials. Pair again." })
+      setConn({ status: "unauthorized", error: t("error.revoked") })
       return
     }
     attempt++
@@ -234,7 +236,7 @@ function tick(b: Backend) {
   if (!lifecycle) return
   const idle = Date.now() - lastActivity.value
   if (conn.value.status === "live" && idle > HEARTBEAT_STALE_MS) {
-    setConn({ status: "reconnecting", error: "No heartbeat from the server" })
+    setConn({ status: "reconnecting", error: t("error.noHeartbeat") })
     kick()
   }
   if (conn.value.status === "live" && document.visibilityState === "visible" && Date.now() - lastPing > 30_000)
@@ -295,22 +297,46 @@ export const draft = signal<{ model?: ModelRef; agent?: string }>({})
 // the gap until the server confirms the switch, so a session refresh that started earlier cannot undo the pick.
 export const localChoice = signal<Record<string, { model?: ModelRef; agent?: string }>>({})
 
+// A fetched session can be older than a pick (or the server's confirmation of it) made while the request was in
+// flight. Each change bumps the session's mark, and a snapshot asked for before the mark keeps the newer model/agent.
+let choiceClock = 0
+const choiceMark = new Map<string, number>()
+
+function fresh(info: Session, askedAt: number): Partial<Session> & { id: string } {
+  if ((choiceMark.get(info.id) ?? 0) <= askedAt) return info
+  const { model: _model, agent: _agent, ...rest } = info
+  return rest
+}
+
 function setChoice(sid: string, patch: { model?: ModelRef; agent?: string } | null, key?: "model" | "agent") {
+  choiceMark.set(sid, ++choiceClock)
   const current = { ...localChoice.value[sid] }
   if (patch) Object.assign(current, patch)
   else if (key) delete current[key]
   localChoice.value = { ...localChoice.value, [sid]: current }
 }
 
+// On v2 a switch is its own request and the next prompt uses whatever the server has. Queue switches per session so
+// they land in order, and let a prompt wait for them so it never runs on the previous model or agent.
+const switching = new Map<string, Promise<void>>()
+
+function queueSwitch(sid: string, run: () => Promise<void>) {
+  const next = (switching.get(sid) ?? Promise.resolve()).then(run)
+  const settled = next.catch(() => {})
+  switching.set(sid, settled)
+  settled.then(() => switching.get(sid) === settled && switching.delete(sid))
+  return next
+}
+
 const sameModel = (a?: ModelRef, b?: ModelRef) =>
   !!a && !!b && a.providerID === b.providerID && a.id === b.id && (a.variant ?? "default") === (b.variant ?? "default")
 export const promptText = signal("")
 export const attention = signal(0)
-export const changesView = signal<{ sessionID: string; from?: string; to?: string; title: string } | undefined>(undefined)
+export const changesView = signal<{ sessionID: string; from?: string; to?: string; title: MessageKey } | undefined>(undefined)
 
 export function showSessionChanges(sessionID: string) {
   const users = (threads.value[sessionID]?.messages ?? []).filter((m) => m.kind === "user")
-  changesView.value = { sessionID, from: users[0]?.id, to: users[users.length - 1]?.id, title: "Changes in this session" }
+  changesView.value = { sessionID, from: users[0]?.id, to: users[users.length - 1]?.id, title: "changes.session" }
 }
 
 export const currentSession = computed(() => (currentSessionID.value ? sessionMap.value[currentSessionID.value] : undefined))
@@ -359,6 +385,8 @@ function resetWorkspace() {
   commands.value = []
   draft.value = {}
   localChoice.value = {}
+  choiceMark.clear()
+  switching.clear()
   sessionSearch.value = ""
 }
 
@@ -397,7 +425,7 @@ export async function loadProjects(b = backend.value) {
   try {
     projects.value = await b.projects()
   } catch (error) {
-    fail(error, "Loading projects")
+    fail(error, t("fail.projects"))
   }
 }
 
@@ -405,6 +433,7 @@ let sessionsRequest = 0
 export async function loadSessions(b = backend.value) {
   if (!b || !directory.value) return
   const req = ++sessionsRequest
+  const asked = choiceClock
   sessionsLoading.value = true
   try {
     const project = projects.value.find((p) => p.directory === directory.value)
@@ -416,12 +445,12 @@ export async function loadSessions(b = backend.value) {
     if (req !== sessionsRequest) return
     batch(() => {
       const map = { ...sessionMap.value }
-      for (const s of list) map[s.id] = { ...map[s.id], ...s }
+      for (const s of list) map[s.id] = { ...map[s.id], ...fresh(s, asked) } as Session
       sessionMap.value = map
       sessionOrder.value = list.filter((s) => !s.parentID).map((s) => s.id)
     })
   } catch (error) {
-    if (req === sessionsRequest) fail(error, "Loading sessions")
+    if (req === sessionsRequest) fail(error, t("fail.sessions"))
   } finally {
     if (req === sessionsRequest) sessionsLoading.value = false
   }
@@ -446,7 +475,7 @@ export async function loadCatalog(b = backend.value) {
     if (a.status === "fulfilled") agents.value = a.value
     if (c.status === "fulfilled") commands.value = c.value
   })
-  if (m.status === "rejected") fail(m.reason, "Loading models")
+  if (m.status === "rejected") fail(m.reason, t("fail.models"))
 }
 
 async function loadPending(b: Backend) {
@@ -509,8 +538,9 @@ export async function openSession(id: string, opts: { quiet?: boolean } = {}) {
   }
   if (!threads.value[id]) setThread(id, { messages: [], loading: true, loaded: false })
   try {
+    const asked = choiceClock
     const [info, page] = await Promise.all([b.session(id), b.messages(id)])
-    upsertSession(info)
+    upsertSession(fresh(info, asked))
     mergePage(id, page)
     if (info.directory && info.directory !== directory.value) {
       directory.value = info.directory
@@ -519,7 +549,7 @@ export async function openSession(id: string, opts: { quiet?: boolean } = {}) {
     }
   } catch (error) {
     patchThread(id, { loading: false })
-    if (!opts.quiet) fail(error, "Opening session")
+    if (!opts.quiet) fail(error, t("fail.openSession"))
     if (currentSessionID.value === id && !sessionMap.value[id]) currentSessionID.value = null
   }
 }
@@ -548,7 +578,7 @@ export async function loadOlder(id: string) {
     })
   } catch (error) {
     patchThread(id, { loadingOlder: false })
-    fail(error, "Loading earlier messages")
+    fail(error, t("fail.older"))
   }
 }
 
@@ -611,11 +641,12 @@ function scheduleRefresh(sessionID: string, messages = true) {
       if (!b) return
       try {
         const loaded = threads.value[sessionID]?.loaded
+        const asked = choiceClock
         const [info, page] = await Promise.all([
           b.session(sessionID),
           messages && loaded ? b.messages(sessionID) : Promise.resolve(undefined),
         ])
-        upsertSession(info)
+        upsertSession(fresh(info, asked))
         if (page) mergePage(sessionID, page)
       } catch {}
     }, 150),
@@ -682,7 +713,7 @@ function apply(event: BackendEvent) {
       else if (was) {
         const { [event.sessionID]: _, ...rest } = busy.value
         busy.value = rest
-        notify("Session finished", sessionMap.value[event.sessionID]?.title)
+        notify(t("notify.finished"), sessionMap.value[event.sessionID]?.title)
       }
       if (event.retry) retrying.value = { ...retrying.value, [event.sessionID]: event.retry }
       else if (retrying.value[event.sessionID]) {
@@ -748,7 +779,7 @@ function apply(event: BackendEvent) {
     case "permission.asked":
       if (!permissions.value.some((p) => p.id === event.permission.id)) {
         permissions.value = [...permissions.value, event.permission]
-        notify("Permission needed", `${event.permission.action}: ${event.permission.resources.join(", ")}`)
+        notify(t("notify.permission"), `${event.permission.action}: ${event.permission.resources.join(", ")}`)
       }
       return
     case "permission.replied":
@@ -757,7 +788,7 @@ function apply(event: BackendEvent) {
     case "form.created":
       if (!forms.value.some((f) => f.id === event.form.id)) {
         forms.value = [...forms.value, event.form]
-        notify("Question from the agent", event.form.fields[0]?.description ?? event.form.title)
+        notify(t("notify.question"), event.form.fields[0]?.description ?? event.form.title)
       }
       return
     case "form.done":
@@ -792,7 +823,7 @@ function removeLocalSession(id: string) {
 
 function need() {
   const b = backend.value
-  if (!b) throw new Error("Not connected")
+  if (!b) throw new AppError("error.notConnected")
   return b
 }
 
@@ -803,7 +834,7 @@ export async function sendPrompt(text: string, files: PromptFile[]) {
   let sid = currentSessionID.value
   try {
     if (!sid) {
-      if (!directory.value) throw new Error("Pick a project folder first")
+      if (!directory.value) throw new AppError("error.pickProject")
       const created = await b.createSession({ directory: directory.value, model: selectedModel.value, agent: selectedAgent.value })
       upsertSession(created)
       sid = created.id
@@ -814,6 +845,7 @@ export async function sendPrompt(text: string, files: PromptFile[]) {
     }
     const session = sessionMap.value[sid]
     if (session?.revert) await b.commitRevert(sid)
+    await switching.get(sid)
     busy.value = { ...busy.value, [sid]: true as const }
     if (trimmed.startsWith("!") && !files.length) {
       await b.shell(sid, trimmed.slice(1).trim())
@@ -831,7 +863,7 @@ export async function sendPrompt(text: string, files: PromptFile[]) {
       const { [sid]: _, ...rest } = busy.value
       busy.value = rest
     }
-    fail(error, "Sending")
+    fail(error, t("fail.send"))
     return false
   }
 }
@@ -842,7 +874,7 @@ export async function interrupt() {
   try {
     await need().interrupt(sid)
   } catch (error) {
-    fail(error, "Stopping")
+    fail(error, t("fail.stop"))
   }
 }
 
@@ -853,12 +885,13 @@ export async function chooseModel(model: ModelRef) {
     return
   }
   setChoice(sid, { model })
-  if (!need().serverModelState) return
+  const b = need()
+  if (!b.serverModelState) return
   try {
-    await need().switchModel(sid, model)
+    await queueSwitch(sid, () => b.switchModel(sid, model))
   } catch (error) {
-    setChoice(sid, null, "model")
-    fail(error, "Switching model")
+    if (sameModel(localChoice.value[sid]?.model, model)) setChoice(sid, null, "model")
+    fail(error, t("fail.model"))
   }
 }
 
@@ -869,12 +902,13 @@ export async function chooseAgent(agent: string) {
     return
   }
   setChoice(sid, { agent })
-  if (!need().serverModelState) return
+  const b = need()
+  if (!b.serverModelState) return
   try {
-    await need().switchAgent(sid, agent)
+    await queueSwitch(sid, () => b.switchAgent(sid, agent))
   } catch (error) {
-    setChoice(sid, null, "agent")
-    fail(error, "Switching agent")
+    if (localChoice.value[sid]?.agent === agent) setChoice(sid, null, "agent")
+    fail(error, t("fail.agent"))
   }
 }
 
@@ -883,7 +917,7 @@ export async function renameSession(id: string, title: string) {
     await need().renameSession(id, title)
     upsertSession({ id, title })
   } catch (error) {
-    fail(error, "Renaming")
+    fail(error, t("fail.rename"))
   }
 }
 
@@ -891,9 +925,9 @@ export async function deleteSession(id: string) {
   try {
     await need().deleteSession(id)
     removeLocalSession(id)
-    toast("Session deleted", "success")
+    toast(t("toast.sessionDeleted"), "success")
   } catch (error) {
-    fail(error, "Deleting")
+    fail(error, t("fail.delete"))
   }
 }
 
@@ -903,18 +937,18 @@ export async function forkSession(id: string, beforeMessageID?: string) {
     upsertSession(s)
     if (!sessionOrder.value.includes(s.id)) sessionOrder.value = [s.id, ...sessionOrder.value]
     await openSession(s.id)
-    toast("Forked into a new session", "success")
+    toast(t("toast.forked"), "success")
   } catch (error) {
-    fail(error, "Forking")
+    fail(error, t("fail.fork"))
   }
 }
 
 export async function compactSession(id: string) {
   try {
     await need().compactSession(id)
-    toast("Compacting context…")
+    toast(t("toast.compacting"))
   } catch (error) {
-    fail(error, "Compacting")
+    fail(error, t("fail.compact"))
   }
 }
 
@@ -928,7 +962,7 @@ export async function revertTo(messageID: string) {
     if (message?.kind === "user" && !promptText.value.trim()) promptText.value = message.text
     scheduleRefresh(sid)
   } catch (error) {
-    fail(error, "Reverting")
+    fail(error, t("fail.revert"))
   }
 }
 
@@ -940,7 +974,7 @@ export async function undoRevert() {
     upsertSession({ id: sid, revert: undefined })
     scheduleRefresh(sid)
   } catch (error) {
-    fail(error, "Restoring")
+    fail(error, t("fail.restore"))
   }
 }
 
@@ -952,7 +986,7 @@ export async function commitRevert() {
     upsertSession({ id: sid, revert: undefined })
     scheduleRefresh(sid)
   } catch (error) {
-    fail(error, "Discarding")
+    fail(error, t("fail.discard"))
   }
 }
 
@@ -962,7 +996,7 @@ export async function answerPermission(p: Permission, decision: "once" | "always
     await need().replyPermission(p, decision, message)
   } catch (error) {
     permissions.value = [...permissions.value, p]
-    fail(error, "Replying")
+    fail(error, t("fail.reply"))
   }
 }
 
@@ -972,7 +1006,7 @@ export async function answerForm(f: Form, answer: Record<string, string | number
     await need().replyForm(f, answer)
   } catch (error) {
     forms.value = [...forms.value, f]
-    fail(error, "Answering")
+    fail(error, t("fail.answer"))
   }
 }
 
@@ -982,7 +1016,7 @@ export async function dismissForm(f: Form) {
     await need().cancelForm(f)
   } catch (error) {
     forms.value = [...forms.value, f]
-    fail(error, "Dismissing")
+    fail(error, t("fail.dismiss"))
   }
 }
 
@@ -996,7 +1030,7 @@ export function projectLabel(dir: string | null) {
 
 effect(() => {
   const n = attention.value
-  const base = "OC Remote Web"
+  const base = APP_NAME
   document.title = n ? `(${n}) ${base}` : base
 })
 
@@ -1005,6 +1039,6 @@ function notify(title: string, body?: string) {
   attention.value++
   if (!prefs.value.notify || typeof Notification === "undefined" || Notification.permission !== "granted") return
   try {
-    new Notification(title, { body: body?.slice(0, 140), tag: "oc-remote", icon: "./icon-192.png" })
+    new Notification(title, { body: body?.slice(0, 140), tag: "oc-remote-web", icon: "./icon-192.png" })
   } catch {}
 }

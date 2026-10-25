@@ -1,6 +1,6 @@
 // Network-first cache of the app shell, so the page still opens with a flaky connection. Only same-origin GET
 // requests are touched: calls to your OpenCode server are never cached or intercepted.
-const CACHE = "oc-remote-shell-v1"
+const CACHE = "oc-remote-web-shell-v1"
 
 self.addEventListener("install", () => self.skipWaiting())
 

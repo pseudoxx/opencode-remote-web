@@ -3,10 +3,11 @@ import { useLayoutEffect, useRef, useState } from "preact/hooks"
 import { Icon } from "./Icon"
 import { CopyButton, Spinner } from "./ui"
 import { renderMarkdown } from "../lib/markdown"
-import { copyText, messageToMarkdown, toolSummary } from "../lib/export"
+import { copyText, messageToMarkdown, noticeText, toolSummary } from "../lib/export"
 import { clockTime, compactNumber, money } from "../lib/format"
 import type { AssistantMessage, Message, NoticeMessage, ToolPart, UserMessage } from "../lib/types"
 import { prefs } from "../state/store"
+import { locale, t } from "../i18n"
 
 type Actions = {
   onRevert?: (id: string) => void
@@ -42,19 +43,19 @@ function UserView({ m, reverted, onRevert, onFork }: { m: UserMessage; reverted?
       <div class="msg-actions">
         {m.pending ? (
           <span class="muted tiny">
-            <Spinner size={10} /> queued
+            <Spinner size={10} /> {t("msg.queued")}
           </span>
         ) : (
           <span class="muted tiny">{clockTime(m.created)}</span>
         )}
         <CopyButton text={() => m.text} onCopy={copyText} />
         {onRevert && !m.pending && !reverted && (
-          <button class="icon-btn small" title="Revert to before this message" aria-label="Revert to here" onClick={() => onRevert(m.id)}>
+          <button class="icon-btn small" title={t("msg.revertTitle")} aria-label={t("msg.revert")} onClick={() => onRevert(m.id)}>
             <Icon name="undo" size={15} />
           </button>
         )}
         {onFork && !m.pending && (
-          <button class="icon-btn small" title="Fork a new session from here" aria-label="Fork from here" onClick={() => onFork(m.id)}>
+          <button class="icon-btn small" title={t("msg.forkTitle")} aria-label={t("msg.fork")} onClick={() => onFork(m.id)}>
             <Icon name="fork" size={15} />
           </button>
         )}
@@ -89,7 +90,7 @@ function AssistantView({
           <span class="muted tiny">
             {[
               m.model?.id,
-              m.tokens ? `${compactNumber(m.tokens.input)} in · ${compactNumber(m.tokens.output)} out` : undefined,
+              m.tokens ? t("msg.tokens", { input: compactNumber(m.tokens.input), output: compactNumber(m.tokens.output) }) : undefined,
               m.cost ? money(m.cost) : undefined,
               m.completed ? clockTime(m.completed) : undefined,
             ]
@@ -99,7 +100,7 @@ function AssistantView({
           {hasText && <CopyButton text={() => messageToMarkdown(m)} onCopy={copyText} />}
           {turnFiles && turnStart && onChanges ? (
             <button class="btn ghost small changes-chip" onClick={() => onChanges(turnStart)}>
-              <Icon name="file" size={14} /> {turnFiles} file{turnFiles === 1 ? "" : "s"} changed
+              <Icon name="file" size={14} /> {t("msg.filesChanged", { count: turnFiles })}
             </button>
           ) : null}
         </div>
@@ -113,29 +114,39 @@ function AssistantView({
 function Markdown({ text, streaming }: { text: string; streaming?: boolean }) {
   const ref = useRef<HTMLDivElement>(null)
   const html = renderMarkdown(text, !streaming)
+  const lang = locale.value
   useLayoutEffect(() => {
     if (streaming) return
     for (const pre of Array.from(ref.current?.querySelectorAll("pre") ?? [])) {
-      if (pre.previousElementSibling?.classList.contains("code-head")) continue
+      const existing = pre.previousElementSibling
+      if (existing?.classList.contains("code-head")) {
+        // The language changed: relabel the buttons added earlier.
+        const copy = existing.querySelector<HTMLButtonElement>(".code-copy")
+        if (copy) {
+          copy.textContent = t("common.copy")
+          copy.setAttribute("aria-label", t("msg.copyCode"))
+        }
+        continue
+      }
       const code = pre.querySelector("code")
       const head = document.createElement("div")
       head.className = "code-head"
-      const lang = document.createElement("span")
-      lang.textContent = /language-([\w+#-]+)/.exec(code?.className ?? "")?.[1] ?? ""
+      const label = document.createElement("span")
+      label.textContent = /language-([\w+#-]+)/.exec(code?.className ?? "")?.[1] ?? ""
       const button = document.createElement("button")
       button.type = "button"
       button.className = "code-copy"
-      button.textContent = "Copy"
-      button.setAttribute("aria-label", "Copy code")
+      button.textContent = t("common.copy")
+      button.setAttribute("aria-label", t("msg.copyCode"))
       button.addEventListener("click", async () => {
         const ok = await copyText(code?.textContent ?? "")
-        button.textContent = ok ? "Copied" : "Copy failed"
-        setTimeout(() => (button.textContent = "Copy"), 1200)
+        button.textContent = ok ? t("common.copied") : t("common.copyFailed")
+        setTimeout(() => (button.textContent = t("common.copy")), 1200)
       })
-      head.append(lang, button)
+      head.append(label, button)
       pre.before(head)
     }
-  }, [html, streaming])
+  }, [html, streaming, lang])
   return <div ref={ref} class="md" dangerouslySetInnerHTML={{ __html: html }} />
 }
 
@@ -145,7 +156,7 @@ function Reasoning({ text, streaming }: { text: string; streaming?: boolean }) {
     <div class={`reasoning${open ? " open" : ""}`}>
       <button class="reasoning-head" onClick={() => setOpen(!open)} aria-expanded={open}>
         <Icon name="brain" size={14} />
-        <span>{streaming ? "Thinking…" : "Thought process"}</span>
+        <span>{streaming ? t("msg.thinking") : t("msg.thought")}</span>
         <Icon name={open ? "chevronDown" : "chevronRight"} size={14} />
       </button>
       {open && <div class="reasoning-body">{text}</div>}
@@ -226,7 +237,7 @@ function ToolBody({ tool }: { tool: ToolPart }) {
       )}
       {long && (
         <button class="btn ghost small" onClick={() => setFull(!full)}>
-          {full ? "Show less" : `Show all (${compactNumber(output.length)} chars)`}
+          {full ? t("msg.showLess") : t("msg.showAll", { count: compactNumber(output.length) })}
         </button>
       )}
       {tool.error && <pre class="tool-error">{tool.error}</pre>}
@@ -268,11 +279,11 @@ function NoticeView({ m }: { m: NoticeMessage }) {
     <div class={`notice ${m.tone}`}>
       {m.detail ? (
         <button class="notice-head" onClick={() => setOpen(!open)} aria-expanded={open}>
-          <span>{m.text}</span>
+          <span>{noticeText(m)}</span>
           <Icon name={open ? "chevronDown" : "chevronRight"} size={12} />
         </button>
       ) : (
-        <span>{m.text}</span>
+        <span>{noticeText(m)}</span>
       )}
       {open && m.detail && <pre class="notice-detail">{m.detail}</pre>}
     </div>

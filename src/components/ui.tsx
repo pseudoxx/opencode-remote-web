@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "preact/hooks"
 import { Icon } from "./Icon"
 import { toasts } from "../state/store"
 import { copyText } from "../lib/export"
+import { t } from "../i18n"
 
 // A native <dialog>: focus trapping, Escape and the backdrop come for free in every current browser. Styled as a
 // bottom sheet on phones and a centered panel on larger screens.
@@ -41,7 +42,7 @@ export function Sheet(props: {
           {props.title !== undefined && (
             <header class="sheet-head">
               <h2>{props.title}</h2>
-              <button class="icon-btn" onClick={props.onClose} aria-label="Close">
+              <button class="icon-btn" onClick={props.onClose} aria-label={t("common.close")}>
                 <Icon name="x" />
               </button>
             </header>
@@ -112,10 +113,10 @@ export function TextPrompt(props: {
         </label>
         <div class="row end">
           <button type="button" class="btn ghost" onClick={props.onClose}>
-            Cancel
+            {t("common.cancel")}
           </button>
           <button type="submit" class="btn primary">
-            {props.confirm ?? "Save"}
+            {props.confirm ?? t("common.save")}
           </button>
         </div>
       </form>
@@ -124,7 +125,7 @@ export function TextPrompt(props: {
 }
 
 export function Spinner({ size = 16 }: { size?: number }) {
-  return <span class="spinner" style={{ width: `${size}px`, height: `${size}px` }} aria-label="Loading" />
+  return <span class="spinner" style={{ width: `${size}px`, height: `${size}px` }} aria-label={t("common.loadingLabel")} />
 }
 
 export function Toasts() {
@@ -139,8 +140,9 @@ export function Toasts() {
   )
 }
 
-export function CopyButton({ text, label = "Copy", onCopy }: { text: () => string; label?: string; onCopy: (text: string) => Promise<boolean> }) {
+export function CopyButton({ text, label: labelProp, onCopy }: { text: () => string; label?: string; onCopy: (text: string) => Promise<boolean> }) {
   const [done, setDone] = useState(false)
+  const label = labelProp ?? t("common.copy")
   return (
     <button
       class="icon-btn small"
@@ -162,7 +164,7 @@ export function Cmd({ text }: { text: string }) {
   return (
     <div class="cmd">
       <code>{text}</code>
-      <CopyButton text={() => text} onCopy={copyText} label="Copy command" />
+      <CopyButton text={() => text} onCopy={copyText} label={t("common.copyCommand")} />
     </div>
   )
 }

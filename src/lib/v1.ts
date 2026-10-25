@@ -15,6 +15,7 @@ import type {
   ToolStatus,
 } from "./types"
 import { basename } from "./format"
+import { AppError } from "./errors"
 
 type V1Session = {
   id: string
@@ -175,7 +176,7 @@ export function createV1(baseUrl: string, fetcher: typeof fetch, version: string
     async compactSession(id) {
       const s = remember(await call<V1Session>("GET", `/session/${id}`, { directory: dirOf(id) }))
       const model = s.model ?? (await defaultModel(s.directory))
-      if (!model) throw new Error("No model available to compact with")
+      if (!model) throw new AppError("error.noCompactModel")
       await call("POST", `/session/${id}/summarize`, { directory: dirOf(id), body: { providerID: model.providerID, modelID: model.id } })
     },
 

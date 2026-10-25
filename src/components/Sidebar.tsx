@@ -28,6 +28,7 @@ import {
 import { dirname, relativeTime, shortPath } from "../lib/format"
 import type { DirEntry, Session } from "../lib/types"
 import { exportSession } from "./exporting"
+import { t } from "../i18n"
 
 export function Sidebar(props: { onNavigate: () => void; onConnection: () => void; onSettings: () => void }) {
   const [projectsOpen, setProjectsOpen] = useState(false)
@@ -41,7 +42,7 @@ export function Sidebar(props: { onNavigate: () => void; onConnection: () => voi
   return (
     <aside class="sidebar">
       <div class="side-top">
-        <button class="server-chip" onClick={props.onConnection} title="Connection details">
+        <button class="server-chip" onClick={props.onConnection} title={t("conn.details")}>
           <Icon name="server" size={16} />
           <span class="ellipsis">{server?.name}</span>
         </button>
@@ -52,7 +53,7 @@ export function Sidebar(props: { onNavigate: () => void; onConnection: () => voi
         <Icon name="folder" size={16} />
         <span class="project-text">
           <strong class="ellipsis">{projectLabel(directory.value)}</strong>
-          <small class="muted ellipsis">{directory.value ? shortPath(directory.value, home.value) : "Choose a project"}</small>
+          <small class="muted ellipsis">{directory.value ? shortPath(directory.value, home.value) : t("side.chooseProject")}</small>
         </span>
         <Icon name="chevronDown" size={16} />
       </button>
@@ -65,14 +66,14 @@ export function Sidebar(props: { onNavigate: () => void; onConnection: () => voi
         }}
         disabled={!directory.value}
       >
-        <Icon name="plus" /> New session
+        <Icon name="plus" /> {t("side.newSession")}
       </button>
 
       <label class="search">
         <Icon name="search" size={16} />
         <input
           type="search"
-          placeholder="Search sessions"
+          placeholder={t("side.search")}
           value={sessionSearch.value}
           onInput={(e) => {
             sessionSearch.value = e.currentTarget.value
@@ -82,14 +83,14 @@ export function Sidebar(props: { onNavigate: () => void; onConnection: () => voi
         />
       </label>
 
-      <nav class="session-list" aria-label="Sessions">
+      <nav class="session-list" aria-label={t("side.sessions")}>
         {sessionsLoading.value && !sessionList.value.length && (
           <div class="empty small">
-            <Spinner /> Loading…
+            <Spinner /> {t("common.loading")}
           </div>
         )}
         {!sessionsLoading.value && !sessionList.value.length && (
-          <div class="empty small muted">{sessionSearch.value ? "No matching sessions" : "No sessions yet"}</div>
+          <div class="empty small muted">{sessionSearch.value ? t("side.noMatches") : t("side.empty")}</div>
         )}
         <ul>
           {sessionList.value.map((s) => (
@@ -101,10 +102,10 @@ export function Sidebar(props: { onNavigate: () => void; onConnection: () => voi
                   props.onNavigate()
                 }}
               >
-                <span class="session-title ellipsis">{s.title || "Untitled session"}</span>
+                <span class="session-title ellipsis">{s.title || t("common.untitled")}</span>
                 <span class="session-meta">
                   {needs.has(s.id) ? (
-                    <span class="badge warn" title="Needs your input">
+                    <span class="badge warn" title={t("side.needsInput")}>
                       !
                     </span>
                   ) : busy.value[s.id] ? (
@@ -113,7 +114,7 @@ export function Sidebar(props: { onNavigate: () => void; onConnection: () => voi
                   <small class="muted">{relativeTime(s.updated)}</small>
                 </span>
               </button>
-              <button class="icon-btn small" aria-label={`Actions for ${s.title || "Untitled session"}`} onClick={() => setMenuFor(s)}>
+              <button class="icon-btn small" aria-label={t("side.actionsFor", { title: s.title || t("common.untitled") })} onClick={() => setMenuFor(s)}>
                 <Icon name="more" size={16} />
               </button>
             </li>
@@ -123,7 +124,7 @@ export function Sidebar(props: { onNavigate: () => void; onConnection: () => voi
 
       <div class="side-foot">
         <button class="btn ghost small" onClick={props.onSettings}>
-          <Icon name="settings" size={16} /> Settings
+          <Icon name="settings" size={16} /> {t("side.settings")}
         </button>
         <span class="muted tiny">v{__APP_VERSION__}</span>
       </div>
@@ -141,20 +142,20 @@ export function Sidebar(props: { onNavigate: () => void; onConnection: () => voi
       <Menu
         open={!!menuFor}
         onClose={() => setMenuFor(undefined)}
-        title={menuFor?.title || "Untitled session"}
+        title={menuFor?.title || t("common.untitled")}
         items={
           menuFor
             ? [
-                { label: "Rename", icon: "edit", onSelect: () => setRenaming(menuFor) },
-                { label: "Fork", icon: "fork", onSelect: () => forkSession(menuFor.id).then(props.onNavigate) },
-                { label: "Export Markdown", icon: "download", onSelect: () => exportSession(menuFor.id, "md") },
-                { label: "Export JSON", icon: "download", onSelect: () => exportSession(menuFor.id, "json") },
+                { label: t("side.rename"), icon: "edit", onSelect: () => setRenaming(menuFor) },
+                { label: t("side.fork"), icon: "fork", onSelect: () => forkSession(menuFor.id).then(props.onNavigate) },
+                { label: t("side.exportMd"), icon: "download", onSelect: () => exportSession(menuFor.id, "md") },
+                { label: t("side.exportJson"), icon: "download", onSelect: () => exportSession(menuFor.id, "json") },
                 {
-                  label: "Delete",
+                  label: t("side.delete"),
                   icon: "trash",
                   danger: true,
                   onSelect: () => {
-                    if (confirm(`Delete "${menuFor.title || "Untitled session"}"? This cannot be undone.`)) deleteSession(menuFor.id)
+                    if (confirm(t("side.deleteConfirm", { title: menuFor.title || t("common.untitled") }))) deleteSession(menuFor.id)
                   },
                 },
               ]
@@ -163,8 +164,8 @@ export function Sidebar(props: { onNavigate: () => void; onConnection: () => voi
       />
       <TextPrompt
         open={!!renaming}
-        title="Rename session"
-        label="Title"
+        title={t("rename.title")}
+        label={t("rename.label")}
         initial={renaming?.title ?? ""}
         onClose={() => setRenaming(undefined)}
         onSubmit={(title) => renaming && renameSession(renaming.id, title)}
@@ -175,7 +176,7 @@ export function Sidebar(props: { onNavigate: () => void; onConnection: () => voi
 
 function ProjectPicker(props: { open: boolean; onClose: () => void; onBrowse: () => void; onPicked: () => void }) {
   return (
-    <Sheet open={props.open} onClose={props.onClose} title="Projects">
+    <Sheet open={props.open} onClose={props.onClose} title={t("projects.title")}>
       <ul class="pick-list">
         {projects.value.map((p) => (
           <li key={p.id + p.directory}>
@@ -196,10 +197,10 @@ function ProjectPicker(props: { open: boolean; onClose: () => void; onBrowse: ()
             </button>
           </li>
         ))}
-        {!projects.value.length && <li class="empty small muted">No projects yet. Open a folder to start.</li>}
+        {!projects.value.length && <li class="empty small muted">{t("projects.empty")}</li>}
       </ul>
       <button class="btn" onClick={props.onBrowse}>
-        <Icon name="folder" /> Open another folder…
+        <Icon name="folder" /> {t("projects.openOther")}
       </button>
     </Sheet>
   )
@@ -222,7 +223,7 @@ function DirectoryBrowser(props: { open: boolean; onClose: () => void; onPicked:
       setEntries(list.filter((e) => e.type === "directory" && !e.name.startsWith(".")))
     } catch (e) {
       setEntries([])
-      setError("Can't list this folder. Check the path.")
+      setError(t("browse.error"))
       void e
     } finally {
       setLoading(false)
@@ -234,7 +235,7 @@ function DirectoryBrowser(props: { open: boolean; onClose: () => void; onPicked:
   }, [props.open])
 
   return (
-    <Sheet open={props.open} onClose={props.onClose} title="Open folder" wide>
+    <Sheet open={props.open} onClose={props.onClose} title={t("browse.title")} wide>
       <form
         class="row"
         onSubmit={(e) => {
@@ -242,18 +243,18 @@ function DirectoryBrowser(props: { open: boolean; onClose: () => void; onPicked:
           load(path.trim())
         }}
       >
-        <button type="button" class="icon-btn" aria-label="Parent folder" onClick={() => load(dirname(path))}>
+        <button type="button" class="icon-btn" aria-label={t("browse.parent")} onClick={() => load(dirname(path))}>
           <Icon name="arrowUp" />
         </button>
         <input class="grow mono" value={path} onInput={(e) => setPath(e.currentTarget.value)} autoCapitalize="off" autoCorrect="off" spellcheck={false} />
         <button type="submit" class="btn small">
-          Go
+          {t("browse.go")}
         </button>
       </form>
       <ul class="pick-list dir-list">
         {loading && (
           <li class="empty small">
-            <Spinner /> Loading…
+            <Spinner /> {t("common.loading")}
           </li>
         )}
         {error && <li class="empty small error">{error}</li>}
@@ -267,11 +268,11 @@ function DirectoryBrowser(props: { open: boolean; onClose: () => void; onPicked:
               </button>
             </li>
           ))}
-        {!loading && !error && !entries.length && <li class="empty small muted">No subfolders</li>}
+        {!loading && !error && !entries.length && <li class="empty small muted">{t("browse.empty")}</li>}
       </ul>
       <div class="row end">
         <button class="btn ghost" onClick={props.onClose}>
-          Cancel
+          {t("common.cancel")}
         </button>
         <button
           class="btn primary"
@@ -282,7 +283,7 @@ function DirectoryBrowser(props: { open: boolean; onClose: () => void; onPicked:
             props.onPicked()
           }}
         >
-          Open this folder
+          {t("browse.open")}
         </button>
       </div>
     </Sheet>

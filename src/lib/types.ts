@@ -1,3 +1,5 @@
+import type { MessageKey, Params } from "../i18n"
+
 // Normalized data model shared by every server adapter. It follows OpenCode v2's shapes closely, since v2 is the
 // primary target, but only carries what the UI renders.
 
@@ -83,12 +85,14 @@ export type AssistantMessage = {
 
 // Everything else (agent/model switches, idle markers, compaction, shell runs, injected text) renders as a
 // compact notice line with optional detail.
+// Text is a message key plus parameters, translated when shown, so it follows the UI language.
 export type NoticeMessage = {
   kind: "notice"
   id: string
   created: number
   tone: "info" | "error" | "muted"
-  text: string
+  key: MessageKey
+  params?: Params
   detail?: string
 }
 

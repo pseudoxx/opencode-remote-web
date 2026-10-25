@@ -26,6 +26,7 @@ import {
 } from "../state/store"
 import { canShareFiles } from "../lib/export"
 import { compactNumber, money } from "../lib/format"
+import { t } from "../i18n"
 
 export function Workspace() {
   const [drawer, setDrawer] = useState(false)
@@ -65,25 +66,25 @@ export function Workspace() {
       <div class="scrim" onClick={() => setDrawer(false)} aria-hidden="true" />
       <main class="main">
         <header class="topbar">
-          <button class="icon-btn only-mobile" aria-label="Open sessions" onClick={() => setDrawer(true)}>
+          <button class="icon-btn only-mobile" aria-label={t("ws.openSessions")} onClick={() => setDrawer(true)}>
             <Icon name="menu" />
           </button>
           <div class="topbar-title">
-            <button class="title-btn ellipsis" onClick={() => sid && setRenaming(true)} disabled={!sid} title={sid ? "Rename" : undefined}>
-              {session?.title || (sid ? "Untitled session" : "New session")}
+            <button class="title-btn ellipsis" onClick={() => sid && setRenaming(true)} disabled={!sid} title={sid ? t("ws.rename") : undefined}>
+              {session?.title || (sid ? t("common.untitled") : t("side.newSession"))}
             </button>
             <small class="muted ellipsis">
               {projectLabel(directory.value)}
               {model ? ` · ${model.id}${model.variant && model.variant !== "default" ? ` (${model.variant})` : ""}` : ""}
               {session && session.tokens.input + session.tokens.output > 0
-                ? ` · ${compactNumber(session.tokens.input + session.tokens.output)} tokens${session.cost ? ` · ${money(session.cost)}` : ""}`
+                ? ` · ${t("ws.tokens", { count: compactNumber(session.tokens.input + session.tokens.output) })}${session.cost ? ` · ${money(session.cost)}` : ""}`
                 : ""}
             </small>
           </div>
           <span class="only-mobile">
             <StatusPill compact onClick={() => setConnOpen(true)} />
           </span>
-          <button class="icon-btn" aria-label="Session menu" onClick={() => setMenuOpen(true)} disabled={!sid}>
+          <button class="icon-btn" aria-label={t("ws.sessionMenu")} onClick={() => setMenuOpen(true)} disabled={!sid}>
             <Icon name="more" />
           </button>
         </header>
@@ -92,20 +93,22 @@ export function Workspace() {
             {c.status === "connecting" || c.status === "reconnecting" ? <Spinner size={12} /> : <Icon name="alert" size={14} />}
             <span class="grow">
               {c.status === "connecting"
-                ? "Connecting…"
+                ? t("conn.connecting")
                 : c.status === "reconnecting"
-                  ? `Reconnecting${c.attempt ? ` (attempt ${c.attempt})` : ""}…`
+                  ? c.attempt
+                    ? t("conn.reconnectingAttempt", { n: c.attempt })
+                    : t("conn.reconnecting")
                   : c.status === "offline"
-                    ? "You're offline. Waiting for the network…"
-                    : (c.error ?? "Connection problem")}
+                    ? t("conn.offlineBanner")
+                    : (c.error ?? t("conn.problem"))}
             </span>
             {c.status === "unauthorized" ? (
               <button class="btn small" onClick={() => disconnect()}>
-                Pair again
+                {t("conn.pairAgain")}
               </button>
             ) : (
               <button class="btn small" onClick={() => retryConnection()}>
-                Retry
+                {t("conn.retry")}
               </button>
             )}
           </div>
@@ -120,23 +123,23 @@ export function Workspace() {
       <Menu
         open={menuOpen}
         onClose={() => setMenuOpen(false)}
-        title={session?.title || "Session"}
+        title={session?.title || t("ws.menuTitle")}
         items={
           sid
             ? [
-                { label: "View changes", icon: "file", onSelect: () => showSessionChanges(sid) },
-                { label: "Copy conversation (Markdown)", icon: "copy", onSelect: () => copySession(sid) },
-                { label: "Download Markdown", icon: "download", onSelect: () => exportSession(sid, "md") },
-                { label: "Download JSON", icon: "download", onSelect: () => exportSession(sid, "json") },
-                share && { label: "Share…", icon: "share", onSelect: () => exportSession(sid, "md", "share") },
-                { label: "Rename", icon: "edit", onSelect: () => setRenaming(true) },
-                { label: "Fork session", icon: "fork", onSelect: () => forkSession(sid) },
-                { label: "Compact context", icon: "refresh", onSelect: () => compactSession(sid) },
+                { label: t("ws.viewChanges"), icon: "file", onSelect: () => showSessionChanges(sid) },
+                { label: t("ws.copyConversation"), icon: "copy", onSelect: () => copySession(sid) },
+                { label: t("ws.downloadMd"), icon: "download", onSelect: () => exportSession(sid, "md") },
+                { label: t("ws.downloadJson"), icon: "download", onSelect: () => exportSession(sid, "json") },
+                share && { label: t("ws.share"), icon: "share", onSelect: () => exportSession(sid, "md", "share") },
+                { label: t("ws.rename"), icon: "edit", onSelect: () => setRenaming(true) },
+                { label: t("ws.forkSession"), icon: "fork", onSelect: () => forkSession(sid) },
+                { label: t("ws.compact"), icon: "refresh", onSelect: () => compactSession(sid) },
                 {
-                  label: "Delete session",
+                  label: t("ws.deleteSession"),
                   icon: "trash",
                   danger: true,
-                  onSelect: () => confirm("Delete this session? This cannot be undone.") && deleteSession(sid),
+                  onSelect: () => confirm(t("ws.deleteConfirm")) && deleteSession(sid),
                 },
               ]
             : []
@@ -144,8 +147,8 @@ export function Workspace() {
       />
       <TextPrompt
         open={renaming}
-        title="Rename session"
-        label="Title"
+        title={t("rename.title")}
+        label={t("rename.label")}
         initial={session?.title ?? ""}
         onClose={() => setRenaming(false)}
         onSubmit={(title) => sid && renameSession(sid, title)}

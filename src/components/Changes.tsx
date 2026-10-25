@@ -4,8 +4,9 @@ import { Sheet, Spinner } from "./ui"
 import { backend } from "../state/store"
 import { describeError } from "../lib/connect"
 import type { FileDiff } from "../lib/types"
+import { t, type MessageKey } from "../i18n"
 
-export type ChangesTarget = { sessionID: string; from?: string; to?: string; title: string }
+export type ChangesTarget = { sessionID: string; from?: string; to?: string; title: MessageKey }
 
 function PatchView({ patch }: { patch: string }) {
   const lines = patch.split("\n").filter((l) => !/^(diff --git|index |--- |\+\+\+ |new file mode|deleted file mode)/.test(l))
@@ -42,18 +43,18 @@ export function ChangesSheet({ target, onClose }: { target?: ChangesTarget; onCl
   const totals = files?.reduce((acc, f) => ({ add: acc.add + f.additions, del: acc.del + f.deletions }), { add: 0, del: 0 })
 
   return (
-    <Sheet open={!!target} onClose={onClose} title={target?.title ?? "Changes"} wide>
+    <Sheet open={!!target} onClose={onClose} title={target ? t(target.title) : t("changes.title")} wide>
       {!files && !error && (
         <div class="empty">
-          <Spinner /> Loading changes…
+          <Spinner /> {t("changes.loading")}
         </div>
       )}
       {error && <p class="note error small">{error}</p>}
-      {files && !files.length && <p class="empty muted small">No file changes.</p>}
+      {files && !files.length && <p class="empty muted small">{t("changes.none")}</p>}
       {files && files.length > 0 && (
         <>
           <p class="muted small">
-            {files.length} file{files.length === 1 ? "" : "s"} · <span class="add-text">+{totals?.add}</span>{" "}
+            {t("changes.files", { count: files.length })} · <span class="add-text">+{totals?.add}</span>{" "}
             <span class="del-text">−{totals?.del}</span>
           </p>
           <ul class="changes">
@@ -66,7 +67,7 @@ export function ChangesSheet({ target, onClose }: { target?: ChangesTarget; onCl
                   <span class="del-text small">−{f.deletions}</span>
                   <Icon name={open === f.file ? "chevronDown" : "chevronRight"} size={14} />
                 </button>
-                {open === f.file && (f.patch ? <PatchView patch={f.patch} /> : <p class="muted small">No patch available.</p>)}
+                {open === f.file && (f.patch ? <PatchView patch={f.patch} /> : <p class="muted small">{t("changes.noPatch")}</p>)}
               </li>
             ))}
           </ul>

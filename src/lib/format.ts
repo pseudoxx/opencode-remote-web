@@ -1,3 +1,5 @@
+import { locale, t } from "../i18n"
+
 export function basename(path: string) {
   const trimmed = path.replace(/[\\/]+$/, "")
   const i = Math.max(trimmed.lastIndexOf("/"), trimmed.lastIndexOf("\\"))
@@ -23,20 +25,42 @@ export function shortPath(path: string, home?: string) {
   return path
 }
 
+// Relative and clock times follow the UI language (Intl), not the browser's default locale.
+const relativeFormats = new Map<string, Intl.RelativeTimeFormat>()
+
+function relativeFormat() {
+  const l = locale.value
+  let f = relativeFormats.get(l)
+  if (!f) {
+    // English narrow ("5m ago") reads best in a dense list; French narrow ("-5 min") does not, so others use short.
+    f = new Intl.RelativeTimeFormat(l, { numeric: "auto", style: l === "en" ? "narrow" : "short" })
+    relativeFormats.set(l, f)
+  }
+  return f
+}
+
 export function relativeTime(ms: number, now = Date.now()) {
   const s = Math.round((now - ms) / 1000)
-  if (s < 45) return "just now"
+  if (s < 45) return t("time.justNow")
   const m = Math.round(s / 60)
-  if (m < 60) return `${m}m ago`
+  if (m < 60) return relativeFormat().format(-m, "minute")
   const h = Math.round(m / 60)
-  if (h < 24) return `${h}h ago`
+  if (h < 24) return relativeFormat().format(-h, "hour")
   const d = Math.round(h / 24)
-  if (d < 7) return `${d}d ago`
-  return new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric" })
+  if (d < 7) return relativeFormat().format(-d, "day")
+  return new Date(ms).toLocaleDateString(locale.value, { month: "short", day: "numeric" })
 }
 
 export function clockTime(ms: number) {
-  return new Date(ms).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })
+  return new Date(ms).toLocaleTimeString(locale.value, { hour: "2-digit", minute: "2-digit" })
+}
+
+export function dateText(ms: number) {
+  return new Date(ms).toLocaleDateString(locale.value)
+}
+
+export function dateTimeText(ms: number) {
+  return new Date(ms).toLocaleString(locale.value)
 }
 
 export function compactNumber(n: number) {

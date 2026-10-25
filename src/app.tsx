@@ -2,7 +2,7 @@ import { useEffect, useState } from "preact/hooks"
 import { ConnectScreen } from "./components/ConnectScreen"
 import { Workspace } from "./components/Workspace"
 import { Toasts } from "./components/ui"
-import { activeServer, connectServer, prefs, servers } from "./state/store"
+import { activeServer, connectServer, disconnect, prefs, servers } from "./state/store"
 
 // A pairing payload can arrive in the URL fragment (https://app/#pair=<link or QR json>). The fragment never
 // reaches the web host, and is removed from the address bar right away so it does not linger in history.
@@ -20,6 +20,18 @@ export function App() {
     if (initial) return
     const last = servers.value.find((s) => s.id === prefs.value.lastServer)
     if (last && !activeServer.value) connectServer(last)
+  }, [])
+
+  // A pairing link opened in a tab that already runs the app only changes the fragment; pair with it as well.
+  useEffect(() => {
+    const onHash = () => {
+      const pair = takePairFragment()
+      if (!pair) return
+      if (activeServer.value) disconnect()
+      setInitial(pair)
+    }
+    window.addEventListener("hashchange", onHash)
+    return () => window.removeEventListener("hashchange", onHash)
   }, [])
 
   return (

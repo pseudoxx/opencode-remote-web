@@ -4,6 +4,8 @@
 // connection this is a guess. After connecting, the server's own paths give a definite answer, which is stored
 // with the saved server.
 
+import type { MessageKey, Params } from "../i18n"
+
 export type HostOS = "macos" | "windows" | "linux"
 
 export const HOST_OS_LABEL: Record<HostOS, string> = { macos: "macOS", windows: "Windows", linux: "Linux" }
@@ -35,23 +37,20 @@ export function deviceOS(): HostOS | "ios" | "android" | undefined {
   if (platform.includes("linux") || ua.includes("linux")) return "linux"
 }
 
-export type HostGuess = { os: HostOS; reason: string; certain: boolean }
+export type HostGuess = { os: HostOS; reason: MessageKey; params?: Params; certain: boolean }
 
 export function guessHostOS(opts: { serverUrl?: string; known?: HostOS; lastPick?: HostOS }): HostGuess {
-  if (opts.known) return { os: opts.known, reason: "Detected when this server last connected.", certain: true }
+  if (opts.known) return { os: opts.known, reason: "host.reasonKnown", certain: true }
   let port = ""
   try {
     port = opts.serverUrl ? new URL(opts.serverUrl).port : ""
   } catch {}
-  if (port === WINDOWS_SERVICE_PORT)
-    return { os: "windows", reason: `Guessed from the port: ${WINDOWS_SERVICE_PORT} is OpenCode's default on Windows.`, certain: false }
+  if (port === WINDOWS_SERVICE_PORT) return { os: "windows", reason: "host.reasonWindowsPort", params: { port }, certain: false }
   const device = deviceOS()
   const desktop = device === "macos" || device === "windows" || device === "linux" ? device : undefined
   const unix = port === UNIX_SERVICE_PORT
-  if (opts.lastPick && (!unix || opts.lastPick !== "windows"))
-    return { os: opts.lastPick, reason: "Your last choice.", certain: false }
-  if (desktop && (!unix || desktop !== "windows"))
-    return { os: desktop, reason: "Guessed from this device.", certain: false }
-  if (unix) return { os: "macos", reason: `${UNIX_SERVICE_PORT} is OpenCode's default port on macOS and Linux.`, certain: false }
-  return { os: "macos", reason: "Pick the computer that runs OpenCode.", certain: false }
+  if (opts.lastPick && (!unix || opts.lastPick !== "windows")) return { os: opts.lastPick, reason: "host.reasonLastPick", certain: false }
+  if (desktop && (!unix || desktop !== "windows")) return { os: desktop, reason: "host.reasonDevice", certain: false }
+  if (unix) return { os: "macos", reason: "host.reasonUnixPort", params: { port }, certain: false }
+  return { os: "macos", reason: "host.reasonPick", certain: false }
 }

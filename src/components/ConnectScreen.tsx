@@ -2,15 +2,22 @@ import { useEffect, useRef, useState } from "preact/hooks"
 import { Icon } from "./Icon"
 import { Cmd, Spinner } from "./ui"
 import { CorsFix } from "./HostSetup"
+import { LanguageSelect } from "./LanguageSelect"
 import { QrScanner, decodeImageFile } from "./QrScanner"
 import { ConnectError, authHeader, describeError, detect, exchangePairingCode } from "../lib/connect"
 import { blockedAsMixedContent, normalizeServerUrl, parseConnectInput, type ConnectRequest } from "../lib/pairing"
 import { newId, type ServerRecord } from "../lib/storage"
 import type { HostOS } from "../lib/hostos"
-import { relativeTime } from "../lib/format"
+import { dateText, relativeTime } from "../lib/format"
+import { APP_NAME } from "../lib/brand"
 import { conn, connectServer, failedServer, removeServer, servers, upsertServer } from "../state/store"
+import { rich, t, type MessageKey } from "../i18n"
 
 type Tab = "scan" | "link" | "password"
+
+// What the screen shows about a failed attempt: a ConnectError (translated on render) or a message key.
+type ScreenError = ConnectError | { reason: "other"; key: MessageKey; url?: string }
+type HelpError = { reason: string; text: string; url?: string }
 
 function hostLabel(url: string) {
   try {
@@ -21,6 +28,13 @@ function hostLabel(url: string) {
   }
 }
 
+function asHelp(error: ScreenError | unknown): HelpError {
+  if (error instanceof ConnectError) return { reason: error.reason, text: error.text, url: error.url }
+  const e = error as { reason?: string; key?: MessageKey; url?: string }
+  if (e && e.reason === "other" && e.key) return { reason: "other", text: t(e.key), url: e.url }
+  return { reason: "other", text: describeError(error) }
+}
+
 export function ConnectScreen({ initial, onInitialUsed }: { initial?: string; onInitialUsed?: () => void }) {
   const [tab, setTab] = useState<Tab>(() => (initial ? "link" : "scan"))
   const [link, setLink] = useState(initial ?? "")
@@ -29,23 +43,20 @@ export function ConnectScreen({ initial, onInitialUsed }: { initial?: string; on
   const [password, setPassword] = useState("")
   const [remember, setRemember] = useState(true)
   const [scanning, setScanning] = useState(false)
-  const [working, setWorking] = useState<string>()
-  const [error, setError] = useState<ConnectError | { reason: "other"; message: string; url?: string }>()
+  const [working, setWorking] = useState<MessageKey>()
+  const [error, setError] = useState<ScreenError | { reason: "unknown"; error: unknown }>()
   const photo = useRef<HTMLInputElement>(null)
-  const autoStarted = useRef(false)
 
   const failedConn = conn.value.status === "error" || conn.value.status === "unauthorized"
+  const other = (key: MessageKey, url?: string) => setError({ reason: "other", key, url })
 
   async function run(request: ConnectRequest | undefined) {
-    if (!request) {
-      setError({ reason: "other", message: "That doesn't look like a pairing link, QR code or server address." })
-      return
-    }
+    if (!request) return other("connect.badInput")
     setError(undefined)
     try {
       let record: ServerRecord
       if (request.type === "pair") {
-        setWorking("Pairing…")
+        setWorking("connect.pairing")
         const paired = await exchangePairingCode(request.urls, request.code)
         record = {
           id: newId(),
@@ -72,7 +83,7 @@ export function ConnectScreen({ initial, onInitialUsed }: { initial?: string; on
       } else {
         // A bare address: try without credentials (servers with no password set), else ask for one.
         record = { id: newId(), name: hostLabel(request.url), url: request.url, username: "opencode", secret: "", auth: "password", remember, added: Date.now() }
-        setWorking("Checking server…")
+        setWorking("connect.checking")
         try {
           await detect(record.url, undefined)
         } catch (e) {
@@ -80,13 +91,12 @@ export function ConnectScreen({ initial, onInitialUsed }: { initial?: string; on
             setUrl(request.url)
             setTab("password")
             setWorking(undefined)
-            setError({ reason: "other", message: "This server needs a password (or use a pairing link from `opencode pair`).", url: request.url })
-            return
+            return other("connect.needsPassword", request.url)
           }
           throw e
         }
       }
-      setWorking("Connecting…")
+      setWorking("connect.connecting")
       const { kind, version } = await detect(record.url, authHeader(record))
       const saved = upsertServer({ ...record, kind, version })
       setWorking(undefined)
@@ -95,16 +105,16 @@ export function ConnectScreen({ initial, onInitialUsed }: { initial?: string; on
       await connectServer(saved)
     } catch (e) {
       setWorking(undefined)
-      setError(e instanceof ConnectError ? e : { reason: "other", message: describeError(e) })
+      setError(e instanceof ConnectError ? e : { reason: "unknown", error: e })
     }
   }
 
   useEffect(() => {
-    if (initial && !autoStarted.current) {
-      autoStarted.current = true
-      onInitialUsed?.()
-      run(parseConnectInput(initial))
-    }
+    if (!initial) return
+    onInitialUsed?.()
+    setTab("link")
+    setLink(initial)
+    run(parseConnectInput(initial))
   }, [initial])
 
   async function pasteFromClipboard() {
@@ -113,21 +123,23 @@ export function ConnectScreen({ initial, onInitialUsed }: { initial?: string; on
       setLink(text)
       if (text.trim()) run(parseConnectInput(text))
     } catch {
-      setError({ reason: "other", message: "Clipboard access was blocked. Long-press the box and paste instead." })
+      other("connect.clipboardBlocked")
     }
   }
 
   async function scanPhoto(file?: File) {
     if (!file) return
-    setWorking("Reading QR code…")
+    setWorking("connect.readingQr")
     const text = await decodeImageFile(file).catch(() => undefined)
     setWorking(undefined)
-    if (!text) return setError({ reason: "other", message: "No QR code found in that image. Try a sharper, closer photo." })
+    if (!text) return other("connect.noQr")
     run(parseConnectInput(text))
   }
 
   const origin = location.origin
   const saved = servers.value
+  const failed = saved.find((s) => s.id === failedServer.value)
+  const shownError = error ? asHelp(error.reason === "unknown" ? (error as { error: unknown }).error : error) : undefined
 
   return (
     <div class="connect">
@@ -135,14 +147,15 @@ export function ConnectScreen({ initial, onInitialUsed }: { initial?: string; on
         <header class="brand">
           <img src="./icon.svg" alt="" width={44} height={44} />
           <div>
-            <h1>OC Remote Web</h1>
-            <p class="muted">Control your OpenCode from any browser. Open source, no backend.</p>
+            <h1>{APP_NAME}</h1>
+            <p class="muted">{t("app.tagline")}</p>
           </div>
+          <LanguageSelect compact />
         </header>
 
         {saved.length > 0 && (
           <section class="card">
-            <h2 class="card-title">Your servers</h2>
+            <h2 class="card-title">{t("connect.yourServers")}</h2>
             <ul class="server-list">
               {saved.map((s) => {
                 const expired = s.expires !== undefined && s.expires < Date.now()
@@ -156,18 +169,18 @@ export function ConnectScreen({ initial, onInitialUsed }: { initial?: string; on
                           {s.url}
                           {s.version ? ` · v${s.version}` : ""}
                           {s.lastUsed ? ` · ${relativeTime(s.lastUsed)}` : ""}
-                          {expired ? " · pairing expired" : s.expires ? ` · valid until ${new Date(s.expires).toLocaleDateString()}` : ""}
-                          {!s.remember ? " · this tab only" : ""}
+                          {expired ? ` · ${t("connect.expired")}` : s.expires ? ` · ${t("connect.validUntil", { date: dateText(s.expires) })}` : ""}
+                          {!s.remember ? ` · ${t("connect.tabOnly")}` : ""}
                         </small>
                       </span>
                       <Icon name="chevronRight" />
                     </button>
                     <button
                       class="icon-btn"
-                      aria-label={`Forget ${s.name}`}
-                      title="Forget"
+                      aria-label={t("connect.forgetLabel", { name: s.name })}
+                      title={t("connect.forget")}
                       onClick={() => {
-                        if (confirm(`Forget ${s.name}? The saved credentials are removed from this browser.`)) removeServer(s.id)
+                        if (confirm(t("connect.forgetConfirm", { name: s.name }))) removeServer(s.id)
                       }}
                     >
                       <Icon name="trash" />
@@ -178,26 +191,30 @@ export function ConnectScreen({ initial, onInitialUsed }: { initial?: string; on
             </ul>
             {failedConn && conn.value.error && (
               <ErrorHelp
-                error={{ reason: conn.value.status === "unauthorized" ? "unauthorized" : (conn.value.reason ?? "other"), message: conn.value.error, url: saved.find((s) => s.id === failedServer.value)?.url }}
+                error={{
+                  reason: conn.value.status === "unauthorized" ? "unauthorized" : (conn.value.reason ?? "other"),
+                  text: conn.value.error,
+                  url: failed?.url,
+                }}
                 origin={origin}
-                known={saved.find((s) => s.id === failedServer.value)?.os}
+                known={failed?.os}
               />
             )}
           </section>
         )}
 
         <section class="card">
-          <h2 class="card-title">{saved.length ? "Add a server" : "Connect to your OpenCode"}</h2>
+          <h2 class="card-title">{saved.length ? t("connect.addServer") : t("connect.title")}</h2>
           <div class="tabs" role="tablist">
             {(
               [
-                ["scan", "Scan QR", "qr"],
-                ["link", "Paste link", "link"],
-                ["password", "Password", "shield"],
+                ["scan", "connect.tab.scan", "qr"],
+                ["link", "connect.tab.link", "link"],
+                ["password", "connect.tab.password", "shield"],
               ] as const
             ).map(([id, label, icon]) => (
               <button key={id} role="tab" aria-selected={tab === id} class={tab === id ? "active" : ""} onClick={() => setTab(id)}>
-                <Icon name={icon} size={16} /> {label}
+                <Icon name={icon} size={16} /> {t(label)}
               </button>
             ))}
           </div>
@@ -215,10 +232,10 @@ export function ConnectScreen({ initial, onInitialUsed }: { initial?: string; on
               ) : (
                 <div class="scan-actions">
                   <button class="btn primary big" onClick={() => setScanning(true)} disabled={!!working}>
-                    <Icon name="camera" /> Scan the QR code
+                    <Icon name="camera" /> {t("connect.scan")}
                   </button>
                   <button class="btn" onClick={() => photo.current?.click()} disabled={!!working}>
-                    <Icon name="image" /> From a photo
+                    <Icon name="image" /> {t("connect.fromPhoto")}
                   </button>
                   <input
                     ref={photo}
@@ -233,7 +250,7 @@ export function ConnectScreen({ initial, onInitialUsed }: { initial?: string; on
                 </div>
               )}
               <p class="muted small">
-                On your computer run <code>opencode pair --remote</code> and scan the code it prints.
+                {rich("connect.scanHint", { pairDevice: <strong>Pair device</strong>, command: <code>opencode pair --remote</code> })}
               </p>
             </div>
           )}
@@ -247,7 +264,7 @@ export function ConnectScreen({ initial, onInitialUsed }: { initial?: string; on
               }}
             >
               <label class="field">
-                <span>Pairing link or server address</span>
+                <span>{t("connect.linkLabel")}</span>
                 <textarea
                   rows={2}
                   placeholder="https://…/auth/connect/…"
@@ -261,11 +278,11 @@ export function ConnectScreen({ initial, onInitialUsed }: { initial?: string; on
               <div class="row">
                 {"clipboard" in navigator && "readText" in (navigator.clipboard ?? {}) && (
                   <button type="button" class="btn" onClick={pasteFromClipboard} disabled={!!working}>
-                    <Icon name="clipboard" /> Paste
+                    <Icon name="clipboard" /> {t("connect.paste")}
                   </button>
                 )}
                 <button type="submit" class="btn primary grow" disabled={!!working || !link.trim()}>
-                  Connect
+                  {t("connect.connect")}
                 </button>
               </div>
             </form>
@@ -277,12 +294,12 @@ export function ConnectScreen({ initial, onInitialUsed }: { initial?: string; on
               onSubmit={(e) => {
                 e.preventDefault()
                 const base = normalizeServerUrl(url)
-                if (!base) return setError({ reason: "other", message: "Enter the server address, e.g. https://my-mac.tailnet.ts.net" })
+                if (!base) return other("connect.enterAddress")
                 run({ type: "password", url: base, username, password })
               }}
             >
               <label class="field">
-                <span>Server address</span>
+                <span>{t("connect.serverAddress")}</span>
                 <input
                   type="text"
                   inputMode="url"
@@ -297,64 +314,61 @@ export function ConnectScreen({ initial, onInitialUsed }: { initial?: string; on
               </label>
               <div class="row">
                 <label class="field grow">
-                  <span>Username</span>
+                  <span>{t("connect.username")}</span>
                   <input value={username} onInput={(e) => setUsername(e.currentTarget.value)} autoCapitalize="off" autoCorrect="off" />
                 </label>
                 <label class="field grow">
-                  <span>Password</span>
+                  <span>{t("connect.password")}</span>
                   <input type="password" value={password} onInput={(e) => setPassword(e.currentTarget.value)} autoComplete="current-password" />
                 </label>
               </div>
               <button type="submit" class="btn primary" disabled={!!working}>
-                Connect
+                {t("connect.connect")}
               </button>
-              <p class="muted small">
-                For <code>opencode serve</code> the password is printed at startup or set with <code>OPENCODE_SERVER_PASSWORD</code>.
-              </p>
+              <p class="muted small">{rich("connect.passwordHint", { serve: <code>opencode serve</code>, env: <code>OPENCODE_SERVER_PASSWORD</code> })}</p>
             </form>
           )}
 
           <label class="check">
             <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.currentTarget.checked)} />
-            <span>Remember on this device</span>
+            <span>{t("connect.remember")}</span>
           </label>
 
           {working && (
             <p class="note">
-              <Spinner /> {working}
+              <Spinner /> {t(working)}
             </p>
           )}
-          {error && <ErrorHelp error={error} origin={origin} />}
+          {shownError && <ErrorHelp error={shownError} origin={origin} />}
         </section>
 
         <details class="card guide">
           <summary>
-            <Icon name="sparkle" /> First time? Set up in two steps
+            <Icon name="sparkle" /> {t("guide.title")}
           </summary>
           <ol>
             <li>
-              <p>
-                Allow this app's origin (<code>{origin}</code>) on the computer that runs OpenCode. Once is enough.
-              </p>
+              <p>{rich("guide.allow", { origin: <code>{origin}</code> })}</p>
               <CorsFix origin={origin} />
             </li>
             <li>
-              <p>Pair this device:</p>
+              <p>{t("guide.pair")}</p>
               <p class="small">
-                In the OpenCode desktop app, open <strong>Pairing</strong> → <strong>Pair device</strong> and turn on{" "}
-                <strong>Remote access</strong>, then scan the QR code here or use <strong>Copy link</strong> and paste it. With
-                the CLI:
+                {rich("guide.pairApp", {
+                  pairing: <strong>Pairing</strong>,
+                  pairDevice: <strong>Pair device</strong>,
+                  remoteAccess: <strong>Remote access</strong>,
+                  copyLink: <strong>Copy link</strong>,
+                })}
               </p>
               <Cmd text="opencode pair --remote" />
               <p class="muted small">
-                Remote access gives an HTTPS address that works from anywhere. On the same Wi-Fi with an HTTP page, plain{" "}
-                <code>opencode pair</code> works too. Using Tailscale or a tunnel? <code>opencode pair --url https://your-address</code>.
+                {rich("guide.pairNote", { pair: <code>opencode pair</code>, pairUrl: <code>opencode pair --url https://your-address</code> })}
               </p>
             </li>
           </ol>
           <p class="muted small">
-            <Icon name="shield" size={14} /> Your credentials are stored only in this browser and are sent only to your
-            server. This page has no backend and no analytics.
+            <Icon name="shield" size={14} /> {t("guide.privacy")}
           </p>
         </details>
       </div>
@@ -362,50 +376,33 @@ export function ConnectScreen({ initial, onInitialUsed }: { initial?: string; on
   )
 }
 
-function ErrorHelp({ error, origin, known }: { error: { reason: string; message: string; url?: string }; origin: string; known?: HostOS }) {
+function ErrorHelp({ error, origin, known }: { error: HelpError; origin: string; known?: HostOS }) {
   return (
     <div class="note error stack">
       <p>
-        <Icon name="alert" /> {error.message}
+        <Icon name="alert" /> {error.text}
       </p>
       {error.reason === "cors" && (
         <div class="stack">
-          <p>Allow this app's origin on the computer running OpenCode, then try again:</p>
+          <p>{t("help.corsIntro")}</p>
           <CorsFix origin={origin} serverUrl={error.url} known={known} />
         </div>
       )}
       {error.reason === "mixed-content" && (
         <p class="small">
-          Turn on remote access when pairing (<code>opencode pair --remote</code>) for an HTTPS link, or put the server
-          behind Tailscale Serve / a Cloudflare Tunnel and use <code>opencode pair --url https://…</code>.
-          {error.url && blockedAsMixedContent(error.url) ? " In Chrome you can also allow local network access when prompted." : ""}
+          {rich("help.mixed", { remote: <code>opencode pair --remote</code>, pairUrl: <code>opencode pair --url https://…</code> })}
+          {error.url && blockedAsMixedContent(error.url) ? ` ${t("help.mixedChrome")}` : ""}
         </p>
       )}
       {error.reason === "unreachable" && (
         <div class="stack">
-          <p class="small">
-            Is OpenCode running? For LAN addresses the server must listen on all interfaces (
-            <code>opencode service set hostname 0.0.0.0</code>) and both devices must be on the same network.
-          </p>
-          <p class="small">
-            If it is running, the browser may be blocking this app's origin. Browsers report that the same way as an
-            unreachable server, so allow the origin to rule it out:
-          </p>
+          <p class="small">{rich("help.unreachable", { hostname: <code>opencode service set hostname 0.0.0.0</code> })}</p>
+          <p class="small">{t("help.unreachableCors")}</p>
           <CorsFix origin={origin} serverUrl={error.url} known={known} />
         </div>
       )}
-      {error.reason === "unauthorized" && (
-        <p class="small">
-          The saved pairing expired or the server password changed. Pair this device again (Pair device in the OpenCode
-          app, or <code>opencode pair</code>).
-        </p>
-      )}
-      {error.reason === "expired-code" && (
-        <p class="small">
-          Pairing links work once and expire after 5 minutes. Create a fresh one (Pair device → New code, or{" "}
-          <code>opencode pair</code>).
-        </p>
-      )}
+      {error.reason === "unauthorized" && <p class="small">{rich("help.unauthorized", { pair: <code>opencode pair</code> })}</p>}
+      {error.reason === "expired-code" && <p class="small">{rich("help.expiredCode", { pair: <code>opencode pair</code> })}</p>}
     </div>
   )
 }

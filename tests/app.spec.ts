@@ -5,6 +5,7 @@ import {
   alpha,
   api,
   beta,
+  closeSidebar,
   connect,
   isMobileLayout,
   newSession,
@@ -142,6 +143,48 @@ test.describe("conversation", () => {
     await expect(page.locator(".msg.assistant").last()).toContainText("mock-smart")
     await expect(page.locator(".notice", { hasText: "Model → mock/mock-smart" }).first()).toBeVisible()
     await expect(page.locator(".topbar-title small")).toContainText("mock-smart (high)")
+  })
+
+  test("a prompt sent right after a model switch uses the new model", async ({ page }) => {
+    await send(page, "first")
+    await waitIdle(page)
+    // Hold the switch so the prompt is ready to go before the server knows about the new model.
+    await page.route(/\/api\/session\/[^/]+\/model$/, async (route) => {
+      await new Promise((r) => setTimeout(r, 1500))
+      await route.continue()
+    })
+    await page.getByLabel("Model").selectOption({ label: "Mock Smart" })
+    await send(page, "second")
+    await expect(page.locator(".msg.assistant").last()).toContainText("mock-smart")
+  })
+
+  test("a session refresh from before a model switch does not undo it", async ({ page }) => {
+    await send(page, "first")
+    await waitIdle(page)
+    // Take the next session snapshot now, but deliver it only after the switch has been confirmed.
+    let taken!: () => void
+    const snapshot = new Promise<void>((resolve) => (taken = resolve))
+    await page.route(
+      (url) => /\/api\/session\/[^/]+$/.test(url.pathname),
+      async (route) => {
+        const response = await route.fetch()
+        taken()
+        await new Promise((r) => setTimeout(r, 1500))
+        await route.fulfill({ response })
+      },
+      { times: 1 },
+    )
+    await openSidebar(page)
+    await page.locator(".sidebar li.active .session-item").click()
+    await closeSidebar(page)
+    await snapshot
+    const switched = page.waitForResponse((r) => /\/api\/session\/[^/]+\/model$/.test(r.url()))
+    await page.getByLabel("Model").selectOption({ label: "Mock Smart" })
+    await switched
+    await page.waitForTimeout(2000)
+    await expect(page.getByLabel("Model")).toHaveValue("mock/mock-smart")
+    await send(page, "second")
+    await expect(page.locator(".msg.assistant").last()).toContainText("mock-smart")
   })
 
   test("approves a permission request and the command runs", async ({ page }) => {

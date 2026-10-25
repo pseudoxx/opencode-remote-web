@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks"
 import { Icon } from "./Icon"
+import { t } from "../i18n"
 
 type Detector = { detect(source: CanvasImageSource): Promise<Array<{ rawValue: string }>> }
 
@@ -69,8 +70,8 @@ export function QrScanner({ onResult, onClose }: { onResult: (text: string) => v
     if (!detector) loadJsQR()
 
     async function start() {
-      if (!window.isSecureContext) return setError("The camera needs an HTTPS page. Paste the link instead.")
-      if (!navigator.mediaDevices?.getUserMedia) return setError("This browser has no camera access. Paste the link instead.")
+      if (!window.isSecureContext) return setError(t("qr.needsHttps"))
+      if (!navigator.mediaDevices?.getUserMedia) return setError(t("qr.noCameraApi"))
       try {
         stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
@@ -80,10 +81,10 @@ export function QrScanner({ onResult, onClose }: { onResult: (text: string) => v
         const name = (e as DOMException).name
         setError(
           name === "NotAllowedError"
-            ? "Camera permission was denied. Allow it in your browser settings, or scan from a photo."
+            ? t("qr.denied")
             : name === "NotFoundError"
-              ? "No camera found. Scan from a photo or paste the link."
-              : `Could not start the camera (${name}).`,
+              ? t("qr.noCamera")
+              : t("qr.failed", { name }),
         )
         return
       }
@@ -133,14 +134,14 @@ export function QrScanner({ onResult, onClose }: { onResult: (text: string) => v
     <div class="scanner">
       <video ref={video} playsInline muted autoPlay />
       {ready && <div class="scanner-frame" aria-hidden="true" />}
-      {!ready && !error && <div class="scanner-msg">Starting camera…</div>}
+      {!ready && !error && <div class="scanner-msg">{t("qr.starting")}</div>}
       {error && (
         <div class="scanner-msg error">
           <Icon name="alert" /> {error}
         </div>
       )}
       <button class="btn small scanner-close" onClick={onClose}>
-        <Icon name="x" size={16} /> Close camera
+        <Icon name="x" size={16} /> {t("qr.close")}
       </button>
     </div>
   )

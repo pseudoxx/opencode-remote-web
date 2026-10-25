@@ -2,16 +2,25 @@ import { OpenCode } from "@opencode/client"
 import { basicAuth, blockedAsMixedContent, isPrivateHost, orderPairingUrls, tokenExpiry } from "./pairing"
 import type { ServerRecord } from "./storage"
 import type { Backend, ServerKind } from "./types"
+import { t, type MessageKey, type Params } from "../i18n"
+import { AppError } from "./errors"
+export { AppError } from "./errors"
 import { createV2 } from "./v2"
 import { createV1 } from "./v1"
 
+// Carries a message key rather than text, so the explanation follows the UI language even after a switch.
 export class ConnectError extends Error {
   constructor(
     readonly reason: "unauthorized" | "cors" | "unreachable" | "mixed-content" | "expired-code" | "not-opencode" | "http",
-    message: string,
+    readonly key: MessageKey,
+    readonly params: Params = {},
     readonly url?: string,
   ) {
-    super(message)
+    super(key)
+  }
+
+  get text() {
+    return t(this.key, this.params)
   }
 }
 
@@ -77,13 +86,13 @@ export async function detect(url: string, auth: string | undefined, signal?: Abo
       const finish = () => {
         if (--remaining > 0) return
         if (networkError !== undefined && !lastStatus) return diagnose(url, networkError).then(reject)
-        reject(new ConnectError("not-opencode", `No OpenCode API found at ${url} (HTTP ${lastStatus}).`, url))
+        reject(new ConnectError("not-opencode", "error.notOpencode", { url, status: lastStatus }, url))
       }
       for (const [kind, probe] of probes) {
         getJson(fetcher, probe, ctrl.signal).then(
           ({ status, body }) => {
             lastStatus = lastStatus || status
-            if (status === 401) return reject(new ConnectError("unauthorized", "The server rejected these credentials.", url))
+            if (status === 401) return reject(new ConnectError("unauthorized", "error.rejected", {}, url))
             const version = (body as { version?: unknown } | undefined)?.version
             if (status === 200 && typeof version === "string") return resolve({ kind, version })
             finish()
@@ -105,19 +114,14 @@ export async function detect(url: string, auth: string | undefined, signal?: Abo
 // fetch() only says "Failed to fetch". Work out why so the user gets an actionable fix.
 export async function diagnose(url: string, cause?: unknown): Promise<ConnectError> {
   if (cause instanceof DOMException && cause.name === "TimeoutError")
-    return new ConnectError("unreachable", `Timed out reaching ${url}.`, url)
-  if (blockedAsMixedContent(url))
-    return new ConnectError(
-      "mixed-content",
-      "This page is HTTPS, so the browser blocks plain-http servers on other machines. Use an HTTPS address (opencode pair --remote, Tailscale Serve, Cloudflare Tunnel).",
-      url,
-    )
+    return new ConnectError("unreachable", "error.timeout", { url }, url)
+  if (blockedAsMixedContent(url)) return new ConnectError("mixed-content", "error.mixedContent", {}, url)
   try {
     // An opaque no-cors response proves the server answered, so the real failure was the CORS check.
     await fetch(`${url}/api/info`, { mode: "no-cors", credentials: "omit", cache: "no-store", signal: AbortSignal.timeout(8000) })
-    return new ConnectError("cors", "The server is reachable but does not allow this app's origin (CORS).", url)
+    return new ConnectError("cors", "error.cors", {}, url)
   } catch {
-    return new ConnectError("unreachable", `Could not reach ${url}. Check the address, that OpenCode is running, and your network.`, url)
+    return new ConnectError("unreachable", "error.unreachable", { url }, url)
   }
 }
 
@@ -171,14 +175,14 @@ export async function exchangePairingCode(urls: string[], code: string, signal?:
       errors.push(await diagnose(url, cause))
       continue
     }
-    if (res.status === 401) throw new ConnectError("expired-code", "This pairing link expired or was already used. Run `opencode pair` again.", url)
+    if (res.status === 401) throw new ConnectError("expired-code", "error.expiredCode", {}, url)
     if (!res.ok) {
-      errors.push(new ConnectError("http", `Pairing failed at ${url} (HTTP ${res.status}).`, url))
+      errors.push(new ConnectError("http", "error.pairingHttp", { url, status: res.status }, url))
       continue
     }
     const body = (await res.json().catch(() => ({}))) as { token?: string }
     if (!body.token) {
-      errors.push(new ConnectError("not-opencode", `${url} did not return a session token.`, url))
+      errors.push(new ConnectError("not-opencode", "error.noToken", { url }, url))
       continue
     }
     return { url, token: body.token, expires: tokenExpiry(body.token) }
@@ -189,7 +193,7 @@ export async function exchangePairingCode(urls: string[], code: string, signal?:
 // The most useful error to show when several addresses failed.
 function pickError(errors: ConnectError[]) {
   const order: ConnectError["reason"][] = ["cors", "expired-code", "http", "not-opencode", "unreachable", "mixed-content"]
-  return [...errors].sort((a, b) => order.indexOf(a.reason) - order.indexOf(b.reason))[0] ?? new ConnectError("unreachable", "No server address to try.")
+  return [...errors].sort((a, b) => order.indexOf(a.reason) - order.indexOf(b.reason))[0] ?? new ConnectError("unreachable", "error.noAddress")
 }
 
 export function createBackend(record: ServerRecord, kind: ServerKind, version: string): Backend {
@@ -199,12 +203,13 @@ export function createBackend(record: ServerRecord, kind: ServerKind, version: s
 }
 
 export function describeError(error: unknown): string {
-  if (error instanceof ConnectError) return error.message
+  if (error instanceof ConnectError) return error.text
+  if (error instanceof AppError) return error.text
   if (error && typeof error === "object") {
     const e = error as { message?: unknown; _tag?: unknown; reason?: unknown; detail?: unknown; cause?: unknown }
-    if (e._tag === "UnauthorizedError") return "Not authorized. Pair this device again."
+    if (e._tag === "UnauthorizedError") return t("error.notAuthorized")
     if (typeof e.message === "string" && e.message && e.message !== "undefined") {
-      if (e.reason === "Transport") return "Network error. The server may be unreachable."
+      if (e.reason === "Transport") return t("error.network")
       return e.message
     }
     if (typeof e.reason === "string") return `${e.reason}${e.detail ? `: ${String(e.detail)}` : ""}`

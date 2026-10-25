@@ -27,6 +27,7 @@ import {
   undoRevert,
 } from "../state/store"
 import type { Form, FormField, Message, Permission } from "../lib/types"
+import { rich, t, type MessageKey } from "../i18n"
 
 export function ChatView() {
   const scroller = useRef<HTMLDivElement>(null)
@@ -73,7 +74,7 @@ export function ChatView() {
 
   const showTurn = useCallback((start: string) => {
     const current = currentSessionID.peek()
-    if (current) changesView.value = { sessionID: current, from: start, title: "Changes in this turn" }
+    if (current) changesView.value = { sessionID: current, from: start, title: "changes.turn" }
   }, [])
 
   // Stable callbacks keep memoized messages from re-rendering on every streamed delta.
@@ -99,12 +100,12 @@ export function ChatView() {
         {!sid && <EmptyState />}
         {sid && thread?.loading && !messages.length && (
           <div class="empty">
-            <Spinner /> Loading conversation…
+            <Spinner /> {t("chat.loading")}
           </div>
         )}
         {thread?.older && (
           <button class="btn ghost small load-older" onClick={older} disabled={thread.loadingOlder}>
-            {thread.loadingOlder ? <Spinner size={12} /> : <Icon name="arrowUp" size={14} />} Load earlier messages
+            {thread.loadingOlder ? <Spinner size={12} /> : <Icon name="arrowUp" size={14} />} {t("chat.loadOlder")}
           </button>
         )}
         {messages.map((m, i) => (
@@ -123,14 +124,14 @@ export function ChatView() {
         ))}
         {sid && isBusy && (
           <div class="working">
-            <Spinner size={14} /> {retrying.value[sid] ? `Retrying: ${retrying.value[sid]}` : "Working…"}
+            <Spinner size={14} /> {retrying.value[sid] ? t("chat.retrying", { message: retrying.value[sid] }) : t("chat.working")}
           </div>
         )}
       </div>
       {showJump && (
         <button
           class="jump"
-          aria-label="Jump to latest"
+          aria-label={t("chat.jump")}
           onClick={() => {
             const el = scroller.current
             if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" })
@@ -172,16 +173,12 @@ function EmptyState() {
   return (
     <div class="empty-state">
       <img src="./icon.svg" alt="" width={56} height={56} />
-      <h2>New session</h2>
-      <p class="muted">
-        in <strong>{projectLabel(directory.value)}</strong>
-      </p>
+      <h2>{t("empty.title")}</h2>
+      <p class="muted">{rich("empty.in", { project: <strong>{projectLabel(directory.value)}</strong> })}</p>
       <ul class="tips muted small">
-        <li>
-          Type a message to start. <code>!cmd</code> runs a shell command, <code>/</code> lists commands.
-        </li>
-        <li>Pick the agent, model and reasoning effort below the input.</li>
-        <li>Attach images or files with the paperclip, or paste them.</li>
+        <li>{rich("empty.tip1", { bang: <code>!cmd</code>, slash: <code>/</code> })}</li>
+        <li>{t("empty.tip2")}</li>
+        <li>{t("empty.tip3")}</li>
       </ul>
     </div>
   )
@@ -196,10 +193,10 @@ function RevertBanner() {
     <div class="revert-banner" role="status">
       <div class="row wrap">
         <Icon name="undo" />
-        <strong class="grow">Reverted to here</strong>
+        <strong class="grow">{t("revert.title")}</strong>
         {files.length > 0 && (
           <button class="btn ghost small" onClick={() => setShowFiles(!showFiles)}>
-            {files.length} file{files.length === 1 ? "" : "s"} restored
+            {t("revert.files", { count: files.length })}
           </button>
         )}
       </div>
@@ -216,14 +213,14 @@ function RevertBanner() {
           ))}
         </ul>
       )}
-      <p class="muted small">The messages below are hidden from the agent. Sending a new message discards them.</p>
+      <p class="muted small">{t("revert.note")}</p>
       <div class="row wrap">
         <button class="btn small" onClick={undoRevert}>
-          Undo revert
+          {t("revert.undo")}
         </button>
         {backend.value?.canCommitRevert && (
-          <button class="btn small danger" onClick={() => confirm("Permanently delete the reverted messages?") && commitRevert()}>
-            Discard reverted messages
+          <button class="btn small danger" onClick={() => confirm(t("revert.discardConfirm")) && commitRevert()}>
+            {t("revert.discard")}
           </button>
         )}
       </div>
@@ -246,8 +243,8 @@ export function PendingCards() {
         <button class="note warn small elsewhere" onClick={() => openSession(elsewhere[0])}>
           <Icon name="alert" size={14} />
           {elsewhere.length === 1
-            ? `"${sessionMap.value[elsewhere[0]]?.title || "Another session"}" needs your input`
-            : `${elsewhere.length} other sessions need your input`}
+            ? t("pending.one", { title: sessionMap.value[elsewhere[0]]?.title || t("pending.another") })
+            : t("pending.many", { count: elsewhere.length })}
           <Icon name="chevronRight" size={14} />
         </button>
       )}
@@ -259,25 +256,25 @@ export function PendingCards() {
   )
 }
 
-const actionLabels: Record<string, string> = {
-  shell: "Run a shell command",
-  bash: "Run a shell command",
-  edit: "Edit files",
-  read: "Read a file",
-  webfetch: "Fetch a web page",
-  websearch: "Search the web",
-  external_directory: "Access a folder outside the project",
-  subagent: "Start a subagent",
+const actionLabels: Record<string, MessageKey> = {
+  shell: "perm.shell",
+  bash: "perm.shell",
+  edit: "perm.edit",
+  read: "perm.read",
+  webfetch: "perm.webfetch",
+  websearch: "perm.websearch",
+  external_directory: "perm.external_directory",
+  subagent: "perm.subagent",
 }
 
 function PermissionCard({ p, more }: { p: Permission; more: number }) {
   const [rejecting, setRejecting] = useState(false)
   const [reason, setReason] = useState("")
   return (
-    <div class="card permission" role="alertdialog" aria-label="Permission request">
+    <div class="card permission" role="alertdialog" aria-label={t("perm.aria")}>
       <div class="row">
         <Icon name="shield" />
-        <strong class="grow">{actionLabels[p.action] ?? `Allow "${p.action}"?`}</strong>
+        <strong class="grow">{actionLabels[p.action] ? t(actionLabels[p.action]) : t("perm.other", { action: p.action })}</strong>
         {more > 0 && <span class="badge">+{more}</span>}
       </div>
       {p.message && <p class="small">{p.message}</p>}
@@ -294,21 +291,21 @@ function PermissionCard({ p, more }: { p: Permission; more: number }) {
             answerPermission(p, "reject", reason.trim() || undefined)
           }}
         >
-          <input class="grow" placeholder="Tell the agent what to do instead (optional)" value={reason} onInput={(e) => setReason(e.currentTarget.value)} autoFocus />
+          <input class="grow" placeholder={t("perm.reasonPlaceholder")} value={reason} onInput={(e) => setReason(e.currentTarget.value)} autoFocus />
           <button class="btn danger" type="submit">
-            Reject
+            {t("perm.reject")}
           </button>
         </form>
       ) : (
         <div class="row wrap end">
           <button class="btn ghost" onClick={() => setRejecting(true)}>
-            Reject
+            {t("perm.reject")}
           </button>
-          <button class="btn" onClick={() => answerPermission(p, "always")} title={p.save?.length ? `Always allow: ${p.save.join(", ")}` : undefined}>
-            Always allow
+          <button class="btn" onClick={() => answerPermission(p, "always")} title={p.save?.length ? t("perm.alwaysTitle", { patterns: p.save.join(", ") }) : undefined}>
+            {t("perm.always")}
           </button>
           <button class="btn primary" onClick={() => answerPermission(p, "once")}>
-            Allow once
+            {t("perm.once")}
           </button>
         </div>
       )}
@@ -339,7 +336,7 @@ function FormCard({ f }: { f: Form }) {
     <form
       class="card question"
       role="alertdialog"
-      aria-label="Question from the agent"
+      aria-label={t("form.aria")}
       onSubmit={(e) => {
         e.preventDefault()
         answerForm(f, answer)
@@ -354,10 +351,10 @@ function FormCard({ f }: { f: Form }) {
       ))}
       <div class="row end">
         <button type="button" class="btn ghost" onClick={() => dismissForm(f)}>
-          Dismiss
+          {t("form.dismiss")}
         </button>
         <button type="submit" class="btn primary" disabled={missing || empty}>
-          Send answer
+          {t("form.send")}
         </button>
       </div>
     </form>
@@ -377,7 +374,7 @@ function FieldInput({ field, value, onChange, single }: { field: FormField; valu
       <div class="stack">
         {head}
         <a class="btn" href={field.url} target="_blank" rel="noopener noreferrer">
-          Open link
+          {t("form.openLink")}
         </a>
       </div>
     )
@@ -433,7 +430,7 @@ function FieldInput({ field, value, onChange, single }: { field: FormField; valu
       {(field.custom || !options.length) && (
         <input
           class={isCustom ? "selected" : ""}
-          placeholder={field.placeholder ?? (options.length ? "Or type your own answer" : "Your answer")}
+          placeholder={field.placeholder ?? (options.length ? t("form.custom") : t("form.answer"))}
           value={isCustom || !options.length ? (value as string) : ""}
           onInput={(e) => onChange(e.currentTarget.value)}
         />

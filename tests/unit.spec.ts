@@ -11,6 +11,14 @@ import {
 } from "../src/lib/pairing"
 import { sessionToMarkdown, toolSummary } from "../src/lib/export"
 import { guessHostOS, osFromPaths } from "../src/lib/hostos"
+import { detectLocale, LOCALES, setLanguage, t } from "../src/i18n"
+import { en } from "../src/i18n/locales/en"
+import { ja } from "../src/i18n/locales/ja"
+import { zhCN } from "../src/i18n/locales/zh-CN"
+import { zhTW } from "../src/i18n/locales/zh-TW"
+import { es } from "../src/i18n/locales/es"
+import { fr } from "../src/i18n/locales/fr"
+import { ko } from "../src/i18n/locales/ko"
 import type { Message, Session } from "../src/lib/types"
 
 test("parses the QR payload printed by opencode pair", () => {
@@ -87,7 +95,7 @@ test("exports a conversation as Markdown with safe code fences", () => {
         { type: "text", key: "x", text: "Done." },
       ],
     },
-    { kind: "notice", id: "n1", created: 3, tone: "muted", text: "Interrupted" },
+    { kind: "notice", id: "n1", created: 3, tone: "muted", key: "notice.interrupted" },
   ]
   const md = sessionToMarkdown(session, messages)
   expect(md).toContain("# Fix the bug")
@@ -129,10 +137,60 @@ test("guesses the OpenCode computer's OS before it can be asked", () => {
     expect(guessHostOS({ serverUrl: "http://10.0.0.2:49374", lastPick: "windows" }).os).toBe("macos")
     expect(guessHostOS({ serverUrl: "https://abc.tunnel.example" }).os).toBe("macos")
     device("Win32", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
-    expect(guessHostOS({ serverUrl: "https://abc.tunnel.example" })).toMatchObject({ os: "windows", reason: "Guessed from this device." })
+    expect(guessHostOS({ serverUrl: "https://abc.tunnel.example" })).toMatchObject({ os: "windows", reason: "host.reasonDevice" })
     device("MacIntel", "Mozilla/5.0 (Macintosh)", 5)
-    expect(guessHostOS({}).reason).toBe("Pick the computer that runs OpenCode.")
+    expect(guessHostOS({}).reason).toBe("host.reasonPick")
   } finally {
     if (original) Object.defineProperty(globalThis, "navigator", original)
+  }
+})
+
+test("picks the UI language from the system setting", () => {
+  expect(detectLocale(["ja-JP", "en-US"])).toBe("ja")
+  expect(detectLocale(["zh-TW"])).toBe("zh-TW")
+  expect(detectLocale(["zh-HK"])).toBe("zh-TW")
+  expect(detectLocale(["zh-Hant-MO"])).toBe("zh-TW")
+  expect(detectLocale(["zh-CN"])).toBe("zh-CN")
+  expect(detectLocale(["zh-SG"])).toBe("zh-CN")
+  expect(detectLocale(["zh"])).toBe("zh-CN")
+  expect(detectLocale(["de-DE", "es-MX"])).toBe("es")
+  expect(detectLocale(["fr-CA"])).toBe("fr")
+  expect(detectLocale(["ko-KR"])).toBe("ko")
+  expect(detectLocale(["de-DE", "pt-BR"])).toBe("en")
+  expect(detectLocale([])).toBe("en")
+  expect(LOCALES.map((l) => l.id)).toEqual(["en", "ja", "zh-CN", "zh-TW", "es", "fr", "ko"])
+})
+
+test("every translation keeps the English placeholders", () => {
+  const placeholders = (text: string) => [...text.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort()
+  const catalogs = { ja, "zh-CN": zhCN, "zh-TW": zhTW, es, fr, ko }
+  for (const [locale, catalog] of Object.entries(catalogs)) {
+    for (const [key, source] of Object.entries(en)) {
+      const target = catalog[key as keyof typeof en]
+      const render = (m: unknown, count: number) => (typeof m === "function" ? m({ count }) : String(m).replace("{count}", String(count)))
+      if (typeof source === "string" && typeof target === "string") {
+        expect(placeholders(target), `${locale} ${key}`).toEqual(placeholders(source))
+      } else {
+        for (const count of [0, 1, 2, 5]) expect(render(target, count), `${locale} ${key}`).not.toMatch(/\{\w+\}/)
+      }
+    }
+  }
+})
+
+test("translates with parameters and plurals", () => {
+  try {
+    setLanguage("en")
+    expect(t("revert.files", { count: 1 })).toBe("1 file restored")
+    expect(t("revert.files", { count: 3 })).toBe("3 files restored")
+    expect(t("conn.pill", { status: "Live" })).toBe("Connection: Live")
+    setLanguage("fr")
+    expect(t("msg.filesChanged", { count: 0 })).toBe("0 fichier modifié")
+    expect(t("msg.filesChanged", { count: 2 })).toBe("2 fichiers modifiés")
+    setLanguage("ja")
+    expect(t("msg.filesChanged", { count: 2 })).toBe("2 個のファイルを変更")
+    setLanguage("zh-TW")
+    expect(t("side.newSession")).toBe("新增工作階段")
+  } finally {
+    setLanguage("auto")
   }
 })

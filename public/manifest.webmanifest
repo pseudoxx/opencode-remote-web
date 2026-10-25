@@ -1,5 +1,5 @@
 {
-  "name": "OpenCode Remote Web",
+  "name": "OC Remote Web",
   "short_name": "OC Remote Web",
   "description": "Browser remote control for your own OpenCode server.",
   "start_url": "./",

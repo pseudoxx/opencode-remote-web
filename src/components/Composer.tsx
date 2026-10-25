@@ -20,6 +20,7 @@ import {
   toast,
 } from "../state/store"
 import type { Model, PromptFile } from "../lib/types"
+import { t } from "../i18n"
 
 const MAX_FILE_BYTES = 15 * 1024 * 1024
 
@@ -53,7 +54,7 @@ export function Composer() {
   const model = selectedModel.value
   const current = models.value.find((m) => m.providerID === model?.providerID && m.id === model?.id)
   const enterSends = prefs.value.enterToSend ?? !coarsePointer
-  const placeholder = directory.value ? (isBusy ? "Steer or queue a message…" : "Message OpenCode…") : "Choose a project first"
+  const placeholder = directory.value ? (isBusy ? t("composer.placeholderBusy") : t("composer.placeholder")) : t("composer.noProject")
 
   // Grow with the content, up to a cap set in CSS. Browsers count a wrapped placeholder in scrollHeight, so the
   // placeholder is a dependency too.
@@ -82,13 +83,13 @@ export function Composer() {
     const next: PromptFile[] = []
     for (const file of Array.from(list)) {
       if (file.size > MAX_FILE_BYTES) {
-        toast(`${file.name} is larger than 15 MB`, "error")
+        toast(t("composer.tooLarge", { name: file.name }), "error")
         continue
       }
       try {
         next.push(await readAsBase64(file))
       } catch {
-        toast(`Could not read ${file.name}`, "error")
+        toast(t("composer.readFailed", { name: file.name }), "error")
       }
     }
     if (next.length) setFiles((prev) => [...prev, ...next])
@@ -150,7 +151,7 @@ export function Composer() {
                 <Icon name="file" size={14} />
               )}
               <span class="ellipsis">{f.name}</span>
-              <button class="icon-btn tiny" aria-label={`Remove ${f.name}`} onClick={() => setFiles(files.filter((_, j) => j !== i))}>
+              <button class="icon-btn tiny" aria-label={t("composer.remove", { name: f.name })} onClick={() => setFiles(files.filter((_, j) => j !== i))}>
                 <Icon name="x" size={12} />
               </button>
             </span>
@@ -158,7 +159,7 @@ export function Composer() {
         </div>
       )}
       <div class="input-row">
-        <button class="icon-btn" aria-label="Attach files" title="Attach files" onClick={() => picker.current?.click()}>
+        <button class="icon-btn" aria-label={t("composer.attach")} title={t("composer.attach")} onClick={() => picker.current?.click()}>
           <Icon name="paperclip" />
         </button>
         <input
@@ -192,17 +193,17 @@ export function Composer() {
               submit()
             }
           }}
-          aria-label="Message"
+          aria-label={t("composer.message")}
         />
         {isBusy && (
-          <button class="icon-btn stop" aria-label="Stop" title="Stop the agent" onClick={() => interrupt()}>
+          <button class="icon-btn stop" aria-label={t("composer.stop")} title={t("composer.stopTitle")} onClick={() => interrupt()}>
             <Icon name="stop" />
           </button>
         )}
         <button
           class="icon-btn send"
-          aria-label="Send"
-          title={enterSends ? "Send (Enter)" : "Send (Ctrl/⌘+Enter)"}
+          aria-label={t("composer.send")}
+          title={enterSends ? t("composer.sendEnter") : t("composer.sendCtrl")}
           disabled={sending || (!text.trim() && !files.length) || !backend.value || !directory.value}
           onClick={submit}
         >
@@ -211,8 +212,8 @@ export function Composer() {
       </div>
       <div class="pickers">
         {agents.value.length > 0 && (
-          <label class="picker" title="Agent">
-            <select value={selectedAgent.value} onChange={(e) => chooseAgent(e.currentTarget.value)} aria-label="Agent">
+          <label class="picker" title={t("composer.agent")}>
+            <select value={selectedAgent.value} onChange={(e) => chooseAgent(e.currentTarget.value)} aria-label={t("composer.agent")}>
               {agents.value.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.name}
@@ -223,16 +224,16 @@ export function Composer() {
             <Icon name="chevronDown" size={12} />
           </label>
         )}
-        <label class="picker grow" title="Model">
+        <label class="picker grow" title={t("composer.model")}>
           <select
             value={model ? modelKey(model) : ""}
             onChange={(e) => {
               const m = models.value.find((x) => modelKey(x) === e.currentTarget.value)
               if (m) chooseModel({ providerID: m.providerID, id: m.id })
             }}
-            aria-label="Model"
+            aria-label={t("composer.model")}
           >
-            {!current && <option value={model ? modelKey(model) : ""}>{model ? modelKey(model) : "Default model"}</option>}
+            {!current && <option value={model ? modelKey(model) : ""}>{model ? modelKey(model) : t("composer.defaultModel")}</option>}
             {grouped.map(([provider, list]) => (
               <optgroup key={provider} label={provider}>
                 {list.map((m) => (
@@ -246,7 +247,7 @@ export function Composer() {
           <Icon name="chevronDown" size={12} />
         </label>
         {current && current.variants.length > 0 && (
-          <label class="picker" title="Reasoning effort">
+          <label class="picker" title={t("composer.effort")}>
             <select
               value={model?.variant ?? "default"}
               onChange={(e) => {
@@ -254,9 +255,9 @@ export function Composer() {
                 const latest = selectedModel.peek()
                 if (latest) chooseModel({ providerID: latest.providerID, id: latest.id, variant: e.currentTarget.value })
               }}
-              aria-label="Reasoning effort"
+              aria-label={t("composer.effort")}
             >
-              <option value="default">Default effort</option>
+              <option value="default">{t("composer.defaultEffort")}</option>
               {current.variants.filter((v) => v !== "default").map((v) => (
                 <option key={v} value={v}>
                   {v}

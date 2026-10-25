@@ -2,6 +2,7 @@ import { useState } from "preact/hooks"
 import { Cmd } from "./ui"
 import { prefs, setPref } from "../state/store"
 import { guessHostOS, HOST_OS_LABEL, type HostOS } from "../lib/hostos"
+import { rich, t, type MessageKey } from "../i18n"
 
 // Where each OpenCode desktop app keeps the CLI it ships with. The app runs the same background service as the
 // CLI, so app-only users can run these without installing anything.
@@ -11,12 +12,18 @@ const APP_CLI: Record<HostOS, string> = {
   linux: "/opt/OpenCode/resources/opencode-cli",
 }
 
+const APP_LABEL: Record<HostOS, [MessageKey, MessageKey]> = {
+  macos: ["host.appMac", "host.appMacName"],
+  windows: ["host.appWindows", "host.appWindowsName"],
+  linux: ["host.appLinux", "host.appLinuxName"],
+}
+
 // PowerShell would split an unquoted comma list into separate arguments.
 const quoteOrigin = (os: HostOS, origin: string) => (os === "windows" ? `"${origin}"` : origin)
 
 function OsPicker({ os, onPick }: { os: HostOS; onPick: (os: HostOS) => void }) {
   return (
-    <div class="os-picker" role="radiogroup" aria-label="Computer running OpenCode">
+    <div class="os-picker" role="radiogroup" aria-label={t("host.picker")}>
       {(Object.keys(HOST_OS_LABEL) as HostOS[]).map((value) => (
         <button
           key={value}
@@ -41,38 +48,23 @@ function useHostOS(serverUrl?: string, known?: HostOS) {
     setPicked(value)
     setPref("hostOS", value)
   }
-  return { os, pick, reason: picked ? undefined : guess.reason }
+  return { os, pick, reason: picked ? undefined : t(guess.reason, guess.params) }
 }
 
 function ServiceCommands({ os, origin }: { os: HostOS; origin: string }) {
+  const [label, name] = APP_LABEL[os]
   const appCommands = (
     <div class="stack tight">
-      <p class="small">
-        {os === "macos" && (
-          <>
-            <strong>OpenCode Mac app</strong> (no CLI needed), in Terminal:
-          </>
-        )}
-        {os === "windows" && (
-          <>
-            <strong>OpenCode Windows app</strong> (no CLI needed), in PowerShell:
-          </>
-        )}
-        {os === "linux" && (
-          <>
-            <strong>OpenCode desktop app</strong> (.deb / .rpm; for the AppImage use the CLI):
-          </>
-        )}
-      </p>
+      <p class="small">{rich(label, { name: <strong>{t(name)}</strong> })}</p>
       <Cmd text={`${APP_CLI[os]} service set cors ${quoteOrigin(os, origin)}`} />
       <Cmd text={`${APP_CLI[os]} service restart`} />
     </div>
   )
+  const cliName = <strong>{t("host.cliName")}</strong>
   const cliCommands = (
     <div class="stack tight">
       <p class="small">
-        <strong>opencode CLI</strong>
-        {os === "macos" ? " (or after OpenCode → Install CLI… in the app menu)" : ""}:
+        {os === "macos" ? rich("host.cliMac", { name: cliName, menu: <strong>{t("host.installCliMenu")}</strong> }) : rich("host.cli", { name: cliName })}
       </p>
       <Cmd text={`opencode service set cors ${quoteOrigin(os, origin)}`} />
       <Cmd text="opencode service restart" />
@@ -94,11 +86,7 @@ export function CorsFix({ origin, serverUrl, known }: { origin: string; serverUr
       <OsPicker os={os} onPick={pick} />
       {reason && <p class="muted tiny">{reason}</p>}
       <ServiceCommands os={os} origin={origin} />
-      <p class="muted small">
-        Running <code>opencode serve</code> yourself instead? Add <code>--cors {origin}</code>. Already allowing other
-        origins? List them all, separated by commas. Restarting the service stops running agents, so do it while nothing is
-        working.
-      </p>
+      <p class="muted small">{rich("host.serveNote", { serve: <code>opencode serve</code>, flag: <code>--cors {origin}</code> })}</p>
     </div>
   )
 }

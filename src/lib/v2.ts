@@ -402,32 +402,29 @@ function toMessage(m: SessionMessageInfo): Message | undefined {
       }
     case "idle":
       if (m.outcome === "succeeded") return undefined
-      return {
-        kind: "notice",
-        id: m.id,
-        created,
-        tone: m.outcome === "failed" ? "error" : "muted",
-        text: m.outcome === "failed" ? `Failed: ${m.error?.message ?? "unknown error"}` : "Interrupted",
-      }
+      return m.outcome === "failed"
+        ? { kind: "notice", id: m.id, created, tone: "error", key: "notice.failed", params: { error: m.error?.message ?? "" } }
+        : { kind: "notice", id: m.id, created, tone: "muted", key: "notice.interrupted" }
     case "agent-switched":
-      return { kind: "notice", id: m.id, created, tone: "muted", text: `Agent → ${m.agent}` }
+      return { kind: "notice", id: m.id, created, tone: "muted", key: "notice.agent", params: { agent: m.agent } }
     case "model-switched":
       return {
         kind: "notice",
         id: m.id,
         created,
         tone: "muted",
-        text: `Model → ${m.model.providerID}/${m.model.id}${m.model.variant ? ` (${m.model.variant})` : ""}`,
+        key: "notice.model",
+        params: { model: `${m.model.providerID}/${m.model.id}${m.model.variant ? ` (${m.model.variant})` : ""}` },
       }
     case "location-switched":
-      return { kind: "notice", id: m.id, created, tone: "muted", text: `Moved to ${m.location.directory}` }
+      return { kind: "notice", id: m.id, created, tone: "muted", key: "notice.moved", params: { directory: m.location.directory } }
     case "compaction":
       return {
         kind: "notice",
         id: m.id,
         created,
         tone: m.status === "failed" ? "error" : "info",
-        text: m.status === "completed" ? "Context compacted" : m.status === "failed" ? "Compaction failed" : "Compacting context…",
+        key: m.status === "completed" ? "notice.compacted" : m.status === "failed" ? "notice.compactionFailed" : "notice.compacting",
         detail: m.status === "completed" ? m.summary : undefined,
       }
     case "shell":
@@ -436,14 +433,17 @@ function toMessage(m: SessionMessageInfo): Message | undefined {
         id: m.id,
         created,
         tone: "info",
-        text: `$ ${m.command}${m.status === "running" ? " (running)" : m.exit !== undefined && m.exit !== 0 ? ` (exit ${m.exit})` : ""}`,
+        key: m.status === "running" ? "notice.shellRunning" : m.exit !== undefined && m.exit !== 0 ? "notice.shellExit" : "notice.shell",
+        params: { command: m.command, code: String(m.exit ?? "") },
         detail: m.output?.output,
       }
     case "synthetic":
     case "system":
-      return { kind: "notice", id: m.id, created, tone: "muted", text: m.description ?? "Context added", detail: m.text }
+      return m.description
+        ? { kind: "notice", id: m.id, created, tone: "muted", key: "notice.text", params: { text: m.description }, detail: m.text }
+        : { kind: "notice", id: m.id, created, tone: "muted", key: "notice.context", detail: m.text }
     case "skill":
-      return { kind: "notice", id: m.id, created, tone: "muted", text: `Skill: ${m.name}`, detail: m.text }
+      return { kind: "notice", id: m.id, created, tone: "muted", key: "notice.skill", params: { name: m.name }, detail: m.text }
   }
 }
 

@@ -1,11 +1,13 @@
 import { backend, fail, sessionMap, toast } from "../state/store"
+import { AppError } from "../lib/connect"
+import { t } from "../i18n"
 import { canShareFiles, copyText, downloadFile, exportFilename, sessionToMarkdown, shareFile } from "../lib/export"
 import type { Message } from "../lib/types"
 
 // Exports always fetch the whole conversation, not just the page currently on screen.
 async function allMessages(sessionID: string) {
   const b = backend.value
-  if (!b) throw new Error("Not connected")
+  if (!b) throw new AppError("error.notConnected")
   const out: Message[] = []
   let cursor: string | undefined
   for (let page = 0; page < 100; page++) {
@@ -40,17 +42,17 @@ export async function exportSession(sessionID: string, format: "md" | "json", vi
       }
     }
     downloadFile(filename, content, mime)
-    toast(`Saved ${filename}`, "success")
+    toast(t("toast.saved", { file: filename }), "success")
   } catch (error) {
-    fail(error, "Export")
+    fail(error, t("fail.export"))
   }
 }
 
 export async function copySession(sessionID: string) {
   try {
     const ok = await copyText(await sessionMarkdown(sessionID))
-    toast(ok ? "Conversation copied as Markdown" : "Copy failed", ok ? "success" : "error")
+    toast(ok ? t("toast.copiedConversation") : t("common.copyFailed"), ok ? "success" : "error")
   } catch (error) {
-    fail(error, "Copy")
+    fail(error, t("fail.copy"))
   }
 }
