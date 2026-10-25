@@ -2,6 +2,10 @@
 
 [English](README.md) · [日本語](README.ja.md) · [简体中文](README.zh-CN.md) · [繁體中文](README.zh-TW.md) · [Español](README.es.md) · **Français** · [한국어](README.ko.md)
 
+<p align="center">
+  🚀 <b>Application Web en direct (GitHub Pages) :</b> <a href="https://pseudoxx.github.io/opencode-remote-web/"><b>https://pseudoxx.github.io/opencode-remote-web/</b></a>
+</p>
+
 Une télécommande pour [OpenCode](https://opencode.ai) qui fonctionne entièrement dans le navigateur. Ouvrez la page
 sur votre téléphone, votre tablette ou un autre ordinateur, scannez le QR code de `opencode pair`, et pilotez vos
 sessions OpenCode : discutez, approuvez des commandes, répondez aux questions de l'agent, changez de modèle, revenez

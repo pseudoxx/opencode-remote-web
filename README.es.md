@@ -2,6 +2,10 @@
 
 [English](README.md) · [日本語](README.ja.md) · [简体中文](README.zh-CN.md) · [繁體中文](README.zh-TW.md) · **Español** · [Français](README.fr.md) · [한국어](README.ko.md)
 
+<p align="center">
+  🚀 <b>Aplicación web en vivo (GitHub Pages):</b> <a href="https://pseudoxx.github.io/opencode-remote-web/"><b>https://pseudoxx.github.io/opencode-remote-web/</b></a>
+</p>
+
 Un control remoto para [OpenCode](https://opencode.ai) que funciona por completo en el navegador. Abre la página en
 tu teléfono, tableta u otro ordenador, escanea el código QR de `opencode pair` y maneja tus sesiones de OpenCode:
 chatea, aprueba comandos, responde a las preguntas del agente, cambia de modelo, revierte turnos, revisa los cambios

@@ -2,6 +2,10 @@
 
 [English](README.md) · **日本語** · [简体中文](README.zh-CN.md) · [繁體中文](README.zh-TW.md) · [Español](README.es.md) · [Français](README.fr.md) · [한국어](README.ko.md)
 
+<p align="center">
+  🚀 <b>オンライン体験 / Web 版 (GitHub Pages):</b> <a href="https://pseudoxx.github.io/opencode-remote-web/"><b>https://pseudoxx.github.io/opencode-remote-web/</b></a>
+</p>
+
 ブラウザだけで動く [OpenCode](https://opencode.ai) のリモコンです。スマートフォン、タブレット、別のパソコンでページを開き、
 `opencode pair` の QR コードをスキャンすれば、OpenCode のセッションを操作できます。チャット、コマンドの承認、
 エージェントからの質問への回答、モデルの切り替え、ターンの巻き戻し、変更の確認、会話のエクスポートに対応しています。
