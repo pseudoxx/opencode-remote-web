@@ -226,3 +226,10 @@ tests/                Playwright end-to-end tests and lab setup
 ## License
 
 MIT
+
+---
+
+<p align="center">
+  <b>Links:</b> <a href="https://linux.do/">LINUX DO</a>
+</p>
+

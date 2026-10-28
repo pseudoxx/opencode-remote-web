@@ -206,3 +206,10 @@ tests/                Playwright end-to-end tests and lab setup
 ## 许可证
 
 MIT
+
+---
+
+<p align="center">
+  <b>友情链接：</b><a href="https://linux.do/">LINUX DO</a>
+</p>
+
